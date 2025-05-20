@@ -4,6 +4,7 @@ A new Flutter project.
 
 ## Members:
 Huynh Truong Hien Vinh
+Dao Duy Anh
 
 ## Getting Started
 
