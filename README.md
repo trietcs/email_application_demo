@@ -2,6 +2,9 @@
 
 A new Flutter project.
 
+## Members:
+Huynh Truong Hien Vinh
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
