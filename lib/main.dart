@@ -1,5 +1,6 @@
 import 'package:email_application/screens/auth/login_screen.dart';
 import 'package:email_application/screens/auth/register_screen.dart';
+import 'package:email_application/screens/main_screen.dart';
 import 'package:email_application/screens/profile/view_profile_screen.dart';
 import 'package:flutter/material.dart';
 
@@ -13,12 +14,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Email',
+      title: 'TVA Email',
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      initialRoute: '/profile',
+      initialRoute: '/main',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/main': (context) => const MainScreen(),
         '/profile': (context) => const ViewProfileScreen(),
       },
     );
