@@ -105,7 +105,7 @@ class FirestoreService {
 
   Future<Map<String, String>?> findUserByContactInfo(String contactInfo) async {
     try {
-      String email = '$contactInfo@email.com';
+      String email = '$contactInfo@tvamail.com';
       final snapshot =
           await usersCollection.where('email', isEqualTo: email).limit(1).get();
       if (snapshot.docs.isEmpty) return null;
