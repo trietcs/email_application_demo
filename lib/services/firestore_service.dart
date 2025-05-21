@@ -46,4 +46,17 @@ class FirestoreService {
       return [];
     }
   }
+
+  Future<void> updateUserProfile(String userId, {String? displayName}) async {
+    try {
+      Map<String, dynamic> dataToUpdate = {};
+      if (displayName != null) dataToUpdate['displayName'] = displayName;
+      if (dataToUpdate.isNotEmpty) {
+        await usersCollection.doc(userId).update(dataToUpdate);
+      }
+    } catch (e) {
+      print('Error updating user profile: $e');
+      throw e;
+    }
+  }
 }
