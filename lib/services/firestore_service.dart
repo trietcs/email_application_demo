@@ -59,4 +59,47 @@ class FirestoreService {
       throw e;
     }
   }
+
+  Future<void> sendEmail({
+    required String senderId,
+    required String senderDisplayName,
+    required List<Map<String, String>> recipients,
+    required String subject,
+    required String body,
+  }) async {
+    try {
+      final emailDataForSender = {
+        'from': {'userId': senderId, 'displayName': senderDisplayName},
+        'to': recipients,
+        'subject': subject,
+        'body': body,
+        'timestamp': FieldValue.serverTimestamp(),
+        'folder': 'sent',
+        'isRead': true,
+        'isStarred': false,
+        'attachments': [],
+      };
+      await usersCollection
+          .doc(senderId)
+          .collection('userEmails')
+          .add(emailDataForSender);
+
+      final emailDataForRecipient = {
+        ...emailDataForSender,
+        'folder': 'inbox',
+        'isRead': false,
+      };
+      for (var recipient in recipients) {
+        if (recipient['userId'] != null && recipient['userId']!.isNotEmpty) {
+          await usersCollection
+              .doc(recipient['userId']!)
+              .collection('userEmails')
+              .add(emailDataForRecipient);
+        }
+      }
+    } catch (e) {
+      print('Error sending email: $e');
+      throw e;
+    }
+  }
 }
