@@ -41,7 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đăng ký thất bại. Vui lòng thử lại.')),
+          const SnackBar(content: Text('Đăng ký thất bại. Số điện thoại đã được sử dụng.')),
         );
       }
       setState(() => _isLoading = false);

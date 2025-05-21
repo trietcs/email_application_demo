@@ -17,21 +17,21 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
 
   void _login() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      final authService = Provider.of<AuthService>(context, listen: false);
-      final user = await authService.signIn(
-        phoneNumber: _phoneNumberController.text,
-        password: _passwordController.text,
+  if (_formKey.currentState!.validate()) {
+    setState(() => _isLoading = true);
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final user = await authService.signIn(
+      phoneNumber: _phoneNumberController.text,
+      password: _passwordController.text,
+    );
+    setState(() => _isLoading = false);
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đăng nhập thất bại. Số điện thoại hoặc mật khẩu không đúng.')),
       );
-      setState(() => _isLoading = false);
-      if (user == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đăng nhập thất bại. Kiểm tra số điện thoại hoặc mật khẩu.')),
-        );
-      }
     }
   }
+}
 
   @override
   void dispose() {
