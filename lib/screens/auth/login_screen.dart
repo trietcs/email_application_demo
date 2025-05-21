@@ -1,3 +1,4 @@
+import 'package:email_application/screens/auth/register_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/services/auth_service.dart';
@@ -17,21 +18,27 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
 
   void _login() async {
-  if (_formKey.currentState!.validate()) {
-    setState(() => _isLoading = true);
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final user = await authService.signIn(
-      phoneNumber: _phoneNumberController.text,
-      password: _passwordController.text,
-    );
-    setState(() => _isLoading = false);
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đăng nhập thất bại. Số điện thoại hoặc mật khẩu không đúng.')),
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final user = await authService.signIn(
+        phoneNumber: _phoneNumberController.text,
+        password: _passwordController.text,
       );
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (user == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Đăng nhập thất bại. Số điện thoại hoặc mật khẩu không đúng.',
+              ),
+            ),
+          );
+        }
+      }
     }
   }
-}
 
   @override
   void dispose() {
@@ -78,7 +85,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: 'Mật khẩu',
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
                       onPressed: () {
                         setState(() => _obscurePassword = !_obscurePassword);
                       },
@@ -99,13 +110,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 _isLoading
                     ? const CircularProgressIndicator()
                     : ElevatedButton(
-                        onPressed: _login,
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-                        child: const Text('Đăng nhập'),
+                      onPressed: _login,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
                       ),
+                      child: const Text('Đăng nhập'),
+                    ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () => Navigator.pushNamed(context, '/register'),
+                  onPressed:
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const RegisterScreen(),
+                        ),
+                      ),
                   child: const Text('Chưa có tài khoản? Đăng ký ngay'),
                 ),
               ],

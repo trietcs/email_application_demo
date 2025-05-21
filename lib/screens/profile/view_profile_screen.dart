@@ -13,7 +13,7 @@ class ViewProfileScreen extends StatefulWidget {
 
 class _ViewProfileScreenState extends State<ViewProfileScreen> {
   final _displayNameController = TextEditingController();
-  bool _isLoading = false;
+  bool _isUpdatingProfile = false;
 
   @override
   void dispose() {
@@ -23,90 +23,143 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
 
   Future<void> _updateProfile(String userId) async {
     if (_displayNameController.text.isNotEmpty) {
-      setState(() => _isLoading = true);
+      setState(() => _isUpdatingProfile = true);
       try {
         await Provider.of<FirestoreService>(
           context,
           listen: false,
         ).updateUserProfile(userId, displayName: _displayNameController.text);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cập nhật hồ sơ thành công')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cập nhật hồ sơ thành công')),
+          );
+        }
       } catch (e) {
+        if (mounted) {
+          // Kiểm tra mounted
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cập nhật hồ sơ thất bại')),
+          );
+        }
+      }
+      if (mounted) {
+        setState(() => _isUpdatingProfile = false);
+      }
+    } else {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cập nhật hồ sơ thất bại')),
+          const SnackBar(content: Text('Vui lòng nhập tên hiển thị')),
         );
       }
-      setState(() => _isLoading = false);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập tên hiển thị')),
-      );
+    }
+  }
+
+  Future<void> _logout() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.signOut();
+
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi đăng xuất: ${e.toString()}')),
+        );
+      }
+      print('Lỗi đăng xuất: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context, listen: false);
+
     return StreamBuilder<User?>(
-      stream: Provider.of<AuthService>(context, listen: false).user,
+      stream: authService.user,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
+
         final user = snapshot.data;
+
         if (user == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Hồ sơ')),
-            body: const Center(child: Text('Vui lòng đăng nhập')),
+            body: const Center(
+              child: Text('Phiên đăng nhập đã kết thúc. Đang chuyển hướng...'),
+            ),
           );
         }
 
-        // Điền displayName hiện tại vào controller nếu chưa điền
-        _displayNameController.text =
-            _displayNameController.text.isEmpty
-                ? user.displayName ?? ''
-                : _displayNameController.text;
+        if (_displayNameController.text.isEmpty && user.displayName != null) {
+          _displayNameController.text = user.displayName!;
+        }
 
         return Scaffold(
           appBar: AppBar(title: const Text('Hồ sơ')),
           body: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Text('SĐT: ${user.email?.split('@')[0] ?? 'N/A'}'),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _displayNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Tên hiển thị',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton(
-                      onPressed: () => _updateProfile(user.uid),
-                      child: const Text('Cập nhật'),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: CircleAvatar(
+                      radius: 50,
+                      child: Icon(Icons.person, size: 50),
                     ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () async {
-                    await Provider.of<AuthService>(
-                      context,
-                      listen: false,
-                    ).signOut();
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      '/login',
-                      (route) => false,
-                    );
-                  },
-                  child: const Text('Đăng xuất'),
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 20),
+                  Center(
+                    child: Text(
+                      'SĐT: ${user.email?.split('@')[0] ?? 'N/A'}',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: _displayNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên hiển thị',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _isUpdatingProfile
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton(
+                        onPressed: () => _updateProfile(user.uid),
+                        child: const Text('Cập nhật thông tin'),
+                      ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Đăng xuất'),
+                    onPressed: _logout,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
