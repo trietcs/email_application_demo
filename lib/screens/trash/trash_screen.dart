@@ -1,66 +1,89 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
-import 'package:email_application/widgets/email_list_item.dart';
+import 'package:email_application/services/auth_service.dart';
+import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/emails/view_email_screen.dart';
+import 'package:email_application/screens/inbox/inbox_screen.dart'; // Import EmailListItem
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TrashScreen extends StatelessWidget {
   const TrashScreen({super.key});
 
-  static final List<EmailData> mockEmails = [
-    EmailData(
-      id: '1',
-      senderName: 'Nguyễn Văn A',
-      subject: 'Quảng cáo sản phẩm',
-      previewText: 'Ưu đãi đặc biệt dành cho bạn...',
-      body: 'Nội dung đầy đủ: Đây là email quảng cáo sản phẩm mới, đã bị xóa.',
-      time: 'Thứ Ba',
-      isRead: true,
-      to: [{'displayName': 'Bạn'}],
-    ),
-    EmailData(
-      id: '2',
-      senderName: 'Trần Thị B',
-      subject: 'Nhắc nhở cuộc họp',
-      previewText: 'Đừng quên cuộc họp ngày mai...',
-      body: 'Nội dung đầy đủ: Nhắc nhở về cuộc họp ngày mai, đã bị xóa nhầm.',
-      time: 'Hôm qua',
-      isRead: false,
-      to: [{'displayName': 'Bạn'}],
-    ),
-  ];
+  Future<List<EmailData>> fetchEmails(BuildContext context, String userId) async {
+    final emails = await Provider.of<FirestoreService>(context, listen: false).getEmails(userId, 'trash');
+    return emails.map((email) => EmailData(
+      id: email['id'] as String,
+      senderName: email['from']['displayName'] as String? ?? 'Unknown',
+      subject: email['subject'] as String? ?? '',
+      previewText: (email['body'] as String? ?? '').length > 50
+          ? '${(email['body'] as String).substring(0, 50)}...'
+          : email['body'] as String? ?? '',
+      body: email['body'] as String? ?? '',
+      time: (email['timestamp'] as Timestamp?)?.toDate().toString() ?? 'N/A',
+      isRead: email['isRead'] as bool? ?? false,
+      to: List<Map<String, String>>.from(email['to'] as List? ?? []),
+    )).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Thùng rác'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: ListView.builder(
-          itemCount: mockEmails.length,
-          itemBuilder: (context, index) {
-            final email = mockEmails[index];
-            return InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ViewEmailScreen(emailData: email),
-                  ),
-                );
-              },
-              child: EmailListItem(
-                senderName: email.senderName,
-                subject: email.subject,
-                previewText: email.previewText,
-                time: email.time,
-                isRead: email.isRead,
-              ),
-            );
-          },
-        ),
-      ),
+    return StreamBuilder<User?>(
+      stream: Provider.of<AuthService>(context, listen: false).user,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final user = snapshot.data;
+        if (user == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Thùng rác')),
+            body: const Center(child: Text('Vui lòng đăng nhập')),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Thư đã gửi')),
+          body: FutureBuilder<List<EmailData>>(
+            future: fetchEmails(context, user.uid),
+            builder: (context, emailSnapshot) {
+              if (emailSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (emailSnapshot.hasError) {
+                return const Center(child: Text('Lỗi khi tải email'));
+              }
+              final emails = emailSnapshot.data ?? [];
+              if (emails.isEmpty) {
+                return const Center(child: Text('Không có thư trong thùng rác'));
+              }
+              return Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: ListView.builder(
+                  itemCount: emails.length,
+                  itemBuilder: (context, index) {
+                    final email = emails[index];
+                    return InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ViewEmailScreen(emailData: email),
+                          ),
+                        );
+                      },
+                      child: EmailListItem(email: email),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
