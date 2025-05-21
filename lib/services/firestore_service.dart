@@ -21,7 +21,84 @@ class FirestoreService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('Error creating user profile: ${e.toString()}');
+      print('Error creating user profile: $e');
+      throw e;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getEmails(
+    String userId,
+    String folder,
+  ) async {
+    try {
+      final snapshot =
+          await usersCollection
+              .doc(userId)
+              .collection('userEmails')
+              .where('folder', isEqualTo: folder)
+              .orderBy('timestamp', descending: true)
+              .get();
+      return snapshot.docs
+          .map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id})
+          .toList();
+    } catch (e) {
+      print('Error getting emails for folder $folder: $e');
+      return [];
+    }
+  }
+
+  Future<void> updateUserProfile(String userId, {String? displayName}) async {
+    try {
+      Map<String, dynamic> dataToUpdate = {};
+      if (displayName != null) dataToUpdate['displayName'] = displayName;
+      if (dataToUpdate.isNotEmpty) {
+        await usersCollection.doc(userId).update(dataToUpdate);
+      }
+    } catch (e) {
+      print('Error updating user profile: $e');
+      throw e;
+    }
+  }
+
+  Future<void> sendEmail({
+    required String senderId,
+    required String senderDisplayName,
+    required List<Map<String, String>> recipients,
+    required String subject,
+    required String body,
+  }) async {
+    try {
+      final emailDataForSender = {
+        'from': {'userId': senderId, 'displayName': senderDisplayName},
+        'to': recipients,
+        'subject': subject,
+        'body': body,
+        'timestamp': FieldValue.serverTimestamp(),
+        'folder': 'sent',
+        'isRead': true,
+        'isStarred': false,
+        'attachments': [],
+      };
+      await usersCollection
+          .doc(senderId)
+          .collection('userEmails')
+          .add(emailDataForSender);
+
+      final emailDataForRecipient = {
+        ...emailDataForSender,
+        'folder': 'inbox',
+        'isRead': false,
+      };
+      for (var recipient in recipients) {
+        if (recipient['userId'] != null && recipient['userId']!.isNotEmpty) {
+          await usersCollection
+              .doc(recipient['userId']!)
+              .collection('userEmails')
+              .add(emailDataForRecipient);
+        }
+      }
+    } catch (e) {
+      print('Error sending email: $e');
       throw e;
     }
   }
