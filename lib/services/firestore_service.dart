@@ -21,8 +21,29 @@ class FirestoreService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('Error creating user profile: ${e.toString()}');
+      print('Error creating user profile: $e');
       throw e;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getEmails(
+    String userId,
+    String folder,
+  ) async {
+    try {
+      final snapshot =
+          await usersCollection
+              .doc(userId)
+              .collection('userEmails')
+              .where('folder', isEqualTo: folder)
+              .orderBy('timestamp', descending: true)
+              .get();
+      return snapshot.docs
+          .map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id})
+          .toList();
+    } catch (e) {
+      print('Error getting emails for folder $folder: $e');
+      return [];
     }
   }
 }
