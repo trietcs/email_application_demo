@@ -4,10 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // Collection references
   CollectionReference get usersCollection => _db.collection('users');
 
-  // Tạo profile người dùng trong Firestore
   Future<void> createUserProfile({
     required User user,
     required String phoneNumber,
