@@ -102,4 +102,23 @@ class FirestoreService {
       throw e;
     }
   }
+
+  Future<Map<String, String>?> findUserByContactInfo(String contactInfo) async {
+    try {
+      String email = '$contactInfo@email.com';
+      final snapshot =
+          await usersCollection.where('email', isEqualTo: email).limit(1).get();
+      if (snapshot.docs.isEmpty) return null;
+      final userDoc = snapshot.docs.first;
+      final userData = userDoc.data() as Map<String, dynamic>?;
+      if (userData == null) return null;
+      return {
+        'userId': userDoc.id,
+        'displayName': userData['displayName'] as String? ?? '',
+      };
+    } catch (e) {
+      print('Error finding user by contactInfo: $e');
+      return null;
+    }
+  }
 }
