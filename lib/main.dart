@@ -8,14 +8,12 @@ import 'package:email_application/screens/auth/login_screen.dart';
 import 'package:email_application/screens/auth/register_screen.dart';
 import 'package:email_application/screens/main_screen.dart';
 import 'package:email_application/screens/profile/view_profile_screen.dart';
-import 'package:email_application/screens/compose/compose_email_screen.dart';
+import 'package:email_application/screens/emails/compose_email_screen.dart';
 import 'package:email_application/widgets/auth_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(
     MultiProvider(
       providers: [
@@ -34,10 +32,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TVA Email',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       home: const AuthWrapper(),
       routes: {
         '/login': (context) => const LoginScreen(),
