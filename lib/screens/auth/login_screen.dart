@@ -18,28 +18,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-
-      // final authService = Provider.of<AuthService>(context, listen: false);
-      // User? user = await authService.signIn(
-      //   phoneNumber: _phoneNumberController.text,
-      //   password: _passwordController.text,
-      // );
-      // if (user != null) {
-      //   Navigator.pushNamed(context, '/main');
-      // } else {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     const SnackBar(content: Text('Đăng nhập thất bại. Vui lòng thử lại.')),
-      //   );
-      // }
-
-      await Future.delayed(const Duration(seconds: 1));
-
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = true);
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final user = await authService.signIn(
+        phoneNumber: _phoneNumberController.text,
+        password: _passwordController.text,
+      );
+      setState(() => _isLoading = false);
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đăng nhập thất bại. Kiểm tra số điện thoại hoặc mật khẩu.')),
+        );
+      }
     }
   }
 
@@ -53,9 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Đăng nhập'),
-      ),
+      appBar: AppBar(title: const Text('Đăng nhập')),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -90,13 +78,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: 'Mật khẩu',
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                      ),
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
                       onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
+                        setState(() => _obscurePassword = !_obscurePassword);
                       },
                     ),
                   ),
@@ -116,16 +100,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     ? const CircularProgressIndicator()
                     : ElevatedButton(
                         onPressed: _login,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 50),
-                        ),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
                         child: const Text('Đăng nhập'),
                       ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/register');
-                  },
+                  onPressed: () => Navigator.pushNamed(context, '/register'),
                   child: const Text('Chưa có tài khoản? Đăng ký ngay'),
                 ),
               ],

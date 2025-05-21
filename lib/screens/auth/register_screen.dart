@@ -27,33 +27,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
         return;
       }
-      setState(() {
-        _isLoading = true;
-      });
-
-      // final authService = Provider.of<AuthService>(context, listen: false);
-      // final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-      // User? user = await authService.signUp(
-      //   phoneNumber: _phoneNumberController.text,
-      //   password: _passwordController.text,
-      // );
-      // if (user != null) {
-      //   await firestoreService.createUserProfile(
-      //     user: user,
-      //     phoneNumber: _phoneNumberController.text,
-      //   );
-      //   Navigator.pushNamed(context, '/main');
-      // } else {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     const SnackBar(content: Text('Đăng ký thất bại. Vui lòng thử lại.')),
-      //   );
-      // }
-
-      await Future.delayed(const Duration(seconds: 1));
-
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = true);
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final user = await authService.signUp(
+        phoneNumber: _phoneNumberController.text,
+        password: _passwordController.text,
+      );
+      if (user != null) {
+        await firestoreService.createUserProfile(
+          user: user,
+          phoneNumber: _phoneNumberController.text,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đăng ký thất bại. Vui lòng thử lại.')),
+        );
+      }
+      setState(() => _isLoading = false);
     }
   }
 
@@ -103,15 +94,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Mật khẩu',
                     border: OutlineInputBorder(),
                     suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
                       onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
+                        setState(() => _obscurePassword = !_obscurePassword);
                       },
                     ),
                   ),
@@ -133,15 +118,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Xác nhận mật khẩu',
                     border: OutlineInputBorder(),
                     suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
+                      icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off),
                       onPressed: () {
-                        setState(() {
-                          _obscureConfirmPassword = !_obscureConfirmPassword;
-                        });
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
                       },
                     ),
                   ),
@@ -150,9 +129,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Vui lòng xác nhận mật khẩu';
                     }
-                    if (value != _passwordController.text) {
-                      return 'Mật khẩu xác nhận không khớp';
-                    }
                     return null;
                   },
                 ),
@@ -160,17 +136,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _isLoading
                     ? const CircularProgressIndicator()
                     : ElevatedButton(
-                      onPressed: _register,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
+                        onPressed: _register,
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+                        child: const Text('Đăng ký'),
                       ),
-                      child: const Text('Đăng ký'),
-                    ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/login');
-                  },
+                  onPressed: () => Navigator.pushNamed(context, '/login'),
                   child: const Text('Đã có tài khoản? Đăng nhập'),
                 ),
               ],
