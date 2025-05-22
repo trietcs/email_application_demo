@@ -5,7 +5,7 @@ class EmailData {
   final String previewText;
   final String body;
   final String time;
-  final bool isRead;
+  bool isRead;
   final List<Map<String, String>> to;
 
   EmailData({

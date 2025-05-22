@@ -5,118 +5,212 @@ import 'package:email_application/models/email_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/emails/view_email_screen.dart';
+import 'package:email_application/widgets/email_list_item.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class InboxScreen extends StatelessWidget {
+class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
 
-  Future<List<EmailData>> fetchEmails(BuildContext context, String userId) async {
-    final emails = await Provider.of<FirestoreService>(context, listen: false).getEmails(userId, 'inbox');
-    return emails.map((email) => EmailData(
-      id: email['id'] as String,
-      senderName: email['from']['displayName'] as String? ?? 'Unknown',
-      subject: email['subject'] as String? ?? '',
-      previewText: (email['body'] as String? ?? '').length > 50
-          ? '${(email['body'] as String).substring(0, 50)}...'
-          : email['body'] as String? ?? '',
-      body: email['body'] as String? ?? '',
-      time: (email['timestamp'] as Timestamp?)?.toDate().toString() ?? 'N/A',
-      isRead: email['isRead'] as bool? ?? false,
-      to: List<Map<String, String>>.from(email['to'] as List? ?? []),
-    )).toList();
-  }
-
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: Provider.of<AuthService>(context, listen: false).user,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        final user = snapshot.data;
-        if (user == null) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Hộp thư đến')),
-            body: const Center(child: Text('Vui lòng đăng nhập')),
-          );
-        }
-
-        return Scaffold(
-          appBar: AppBar(title: const Text('Hộp thư đến')),
-          body: FutureBuilder<List<EmailData>>(
-            future: fetchEmails(context, user.uid),
-            builder: (context, emailSnapshot) {
-              if (emailSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (emailSnapshot.hasError) {
-                return const Center(child: Text('Lỗi khi tải email'));
-              }
-              final emails = emailSnapshot.data ?? [];
-              if (emails.isEmpty) {
-                return const Center(child: Text('Không có thư trong hộp thư đến'));
-              }
-              return Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: ListView.builder(
-                  itemCount: emails.length,
-                  itemBuilder: (context, index) {
-                    final email = emails[index];
-                    return InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ViewEmailScreen(emailData: email),
-                          ),
-                        );
-                      },
-                      child: EmailListItem(email: email),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
+  State<InboxScreen> createState() => _InboxScreenState();
 }
 
-class EmailListItem extends StatelessWidget {
-  final EmailData email;
+class _InboxScreenState extends State<InboxScreen> {
+  late Future<List<EmailData>> _emailsFuture;
+  User? _currentUser;
 
-  const EmailListItem({super.key, required this.email});
+  @override
+  void initState() {
+    super.initState();
+    _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
+    _loadEmails();
+  }
+
+  void _loadEmails() {
+    if (_currentUser != null) {
+      if (mounted) {
+        setState(() {
+          _emailsFuture = _fetchEmails(context, _currentUser!.uid, 'inbox');
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _emailsFuture = Future.value([]);
+        });
+      }
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newUser = Provider.of<User?>(context);
+    if (newUser != _currentUser) {
+      _currentUser = newUser;
+      _loadEmails();
+    }
+  }
+
+  Future<List<EmailData>> _fetchEmails(
+    BuildContext context,
+    String userId,
+    String folder,
+  ) async {
+    final firestoreService = Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    );
+    final emailsData = await firestoreService.getEmails(userId, folder);
+
+    if (!mounted) return [];
+
+    return emailsData.map((emailMap) {
+      Timestamp? timestamp = emailMap['timestamp'] as Timestamp?;
+      String timeString = 'N/A';
+      if (timestamp != null) {
+        try {
+          timeString = timestamp.toDate().toLocal().toString();
+        } catch (e) {
+          print(
+            "Error converting timestamp: $e for email ID ${emailMap['id']}",
+          );
+        }
+      }
+      String body = emailMap['body'] as String? ?? '';
+      String previewText =
+          body.length > 50 ? '${body.substring(0, 50)}...' : body;
+
+      return EmailData(
+        id: emailMap['id'] as String? ?? '',
+        senderName:
+            (emailMap['from'] as Map<String, dynamic>?)?['displayName']
+                as String? ??
+            'N/A',
+        subject: emailMap['subject'] as String? ?? '(Không có chủ đề)',
+        previewText: previewText,
+        body: body,
+        time: timeString,
+        isRead: emailMap['isRead'] as bool? ?? true,
+        to:
+            (emailMap['to'] as List<dynamic>?)
+                ?.map((e) => e as Map<String, dynamic>)
+                .map(
+                  (recipientMap) => {
+                    'userId': recipientMap['userId'] as String? ?? '',
+                    'displayName': recipientMap['displayName'] as String? ?? '',
+                  },
+                )
+                .toList() ??
+            [],
+      );
+    }).toList();
+  }
+
+  Future<void> _handleEmailTap(EmailData email) async {
+    if (_currentUser == null || !mounted) return;
+
+    bool wasInitiallyUnread = !email.isRead;
+
+    if (wasInitiallyUnread) {}
+
+    final resultFromView = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ViewEmailScreen(emailData: email),
+      ),
+    );
+
+    if (resultFromView == true || wasInitiallyUnread) {
+      _loadEmails();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: ListTile(
-        leading: CircleAvatar(
-          child: Text(email.senderName.isNotEmpty ? email.senderName[0] : '?'),
-        ),
-        title: Text(
-          email.senderName,
-          style: TextStyle(fontWeight: email.isRead ? FontWeight.normal : FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              email.subject,
-              style: TextStyle(fontWeight: email.isRead ? FontWeight.normal : FontWeight.bold),
-            ),
-            Text(email.previewText, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-        trailing: Text(
-          email.time.split(' ')[0],
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
+    if (_currentUser == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Hộp thư đến')),
+        body: const Center(child: Text('Vui lòng đăng nhập để xem hộp thư.')),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Hộp thư đến')),
+      body: RefreshIndicator(
+        onRefresh: () async => _loadEmails(),
+        child: FutureBuilder<List<EmailData>>(
+          future: _emailsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              print('InboxScreen FutureBuilder Error: ${snapshot.error}');
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Colors.red,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Lỗi khi tải email: ${snapshot.error}',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Thử lại'),
+                        onPressed: _loadEmails,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            final emails = snapshot.data ?? [];
+            if (emails.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.inbox_outlined,
+                      size: 60,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Hộp thư đến của bạn trống trơn!',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Tải lại'),
+                      onPressed: _loadEmails,
+                    ),
+                  ],
+                ),
+              );
+            }
+            return ListView.builder(
+              itemCount: emails.length,
+              itemBuilder: (context, index) {
+                final email = emails[index];
+                return EmailListItem(
+                  email: email,
+                  onTap: () => _handleEmailTap(email),
+                );
+              },
+            );
+          },
         ),
       ),
     );
