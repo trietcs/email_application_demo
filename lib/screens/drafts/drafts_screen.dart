@@ -189,6 +189,8 @@ class _DraftsScreenState extends State<DraftsScreen> {
                 return EmailListItem(
                   email: email,
                   onTap: () => _handleDraftTap(email),
+                  onReadStatusChanged:
+                      _loadEmails, // Làm mới danh sách khi trạng thái thay đổi
                 );
               },
             );

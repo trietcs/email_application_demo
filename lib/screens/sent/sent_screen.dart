@@ -190,6 +190,8 @@ class _SentScreenState extends State<SentScreen> {
                 return EmailListItem(
                   email: email,
                   onTap: () => _handleEmailTap(email),
+                  onReadStatusChanged:
+                      _loadEmails, // Làm mới danh sách khi trạng thái thay đổi
                 );
               },
             );
