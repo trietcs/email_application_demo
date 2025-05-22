@@ -152,6 +152,13 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
         body: _bodyController.text,
       );
 
+      if (_editingDraftId.isNotEmpty) {
+        await firestoreService.deleteEmailPermanently(
+          userId: senderId,
+          emailId: _editingDraftId,
+        );
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(
           context,
