@@ -108,14 +108,18 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   Future<void> _handleEmailTap(EmailData email) async {
-    if (!mounted) return;
+    if (_currentUser == null || !mounted) return;
+
+    bool wasInitiallyUnread = !email.isRead;
+
     final resultFromView = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ViewEmailScreen(emailData: email),
       ),
     );
-    if (resultFromView == true) {
+
+    if (resultFromView == true || wasInitiallyUnread) {
       _loadEmails();
     }
   }
@@ -125,9 +129,10 @@ class _TrashScreenState extends State<TrashScreen> {
     if (_currentUser == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Thùng rác')),
-        body: const Center(child: Text('Vui lòng đăng nhập.')),
+        body: const Center(child: Text('Vui lòng đăng nhập để xem hộp thư.')),
       );
     }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Thùng rác')),
       body: RefreshIndicator(
@@ -139,9 +144,31 @@ class _TrashScreenState extends State<TrashScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
+              print('TrashScreen FutureBuilder Error: ${snapshot.error}');
               return Center(
-                child: Text(
-                  'Lỗi khi tải thư trong thùng rác: ${snapshot.error}',
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Colors.red,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Lỗi khi tải email: ${snapshot.error}',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Thử lại'),
+                        onPressed: _loadEmails,
+                      ),
+                    ],
+                  ),
                 ),
               );
             }
@@ -178,6 +205,8 @@ class _TrashScreenState extends State<TrashScreen> {
                 return EmailListItem(
                   email: email,
                   onTap: () => _handleEmailTap(email),
+                  onReadStatusChanged:
+                      _loadEmails, // Làm mới danh sách khi trạng thái thay đổi
                 );
               },
             );

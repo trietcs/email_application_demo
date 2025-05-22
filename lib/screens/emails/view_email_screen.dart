@@ -90,55 +90,53 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
       },
     );
 
-    if (confirmed == true) {
-      if (!mounted) return;
-      setState(() => _isProcessingAction = true);
-      final user = Provider.of<AuthService>(context, listen: false).currentUser;
-      final firestoreService = Provider.of<FirestoreService>(
-        context,
-        listen: false,
-      );
+    if (confirmed != true) return;
 
-      if (user != null && _currentEmailData.id.isNotEmpty) {
-        try {
-          print(
-            "ViewEmailScreen: Placeholder for moveEmailToTrash API call for ${_currentEmailData.id}",
-          );
-          await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+    setState(() => _isProcessingAction = true);
+    final user = Provider.of<AuthService>(context, listen: false).currentUser;
+    final firestoreService = Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    );
+    final scaffoldMessenger = ScaffoldMessenger.of(context); // Lưu trước
 
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Đã chuyển thư vào thùng rác (Chức năng chờ API).',
-                ),
-              ),
-            );
-            Navigator.pop(context, true);
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Lỗi khi xóa thư: ${e.toString()}')),
-            );
-          }
-          print("Error moving email to trash: $e");
-        } finally {
-          if (mounted) {
-            setState(() => _isProcessingAction = false);
-          }
-        }
-      } else {
+    if (user != null && _currentEmailData.id.isNotEmpty) {
+      try {
+        await firestoreService.deleteEmail(
+          userId: user.uid,
+          emailId: _currentEmailData.id,
+          targetFolder: 'trash',
+        );
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Không thể xóa thư, thiếu thông tin người dùng hoặc email.',
-              ),
-            ),
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(content: Text('Đã chuyển thư vào thùng rác')),
           );
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text('Lỗi khi xóa thư: ${e.toString()}')),
+          );
+        }
+        print("Error deleting email: $e");
+      } finally {
+        if (mounted) {
           setState(() => _isProcessingAction = false);
         }
+      }
+    } else {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không thể xóa thư, thiếu thông tin người dùng hoặc email.',
+            ),
+          ),
+        );
+        setState(() => _isProcessingAction = false);
       }
     }
   }
