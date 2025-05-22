@@ -57,80 +57,88 @@ class _DraftsScreenState extends State<DraftsScreen> {
     String userId,
     String folder,
   ) async {
-    final firestoreService = Provider.of<FirestoreService>(
-      context,
-      listen: false,
-    );
-    final emailsData = await firestoreService.getEmails(userId, folder);
-
-    if (!mounted) return [];
-
-    return emailsData.map((emailMap) {
-      Timestamp? timestamp = emailMap['timestamp'] as Timestamp?;
-      String timeString = 'N/A';
-      if (timestamp != null) {
-        try {
-          timeString = timestamp.toDate().toLocal().toString();
-        } catch (e) {
-          print(
-            "Error converting timestamp: $e for email ID ${emailMap['id']}",
-          );
-        }
-      }
-      String body = emailMap['body'] as String? ?? '';
-      String previewText =
-          body.length > 50 ? '${body.substring(0, 50)}...' : body;
-
-      String draftRecipientOrSubject = '';
-
-      final toList = emailMap['to'] as List<dynamic>?;
-      if (toList != null && toList.isNotEmpty) {
-        final firstTo = toList[0] as Map<String, dynamic>?;
-        draftRecipientOrSubject = firstTo?['displayName'] as String? ?? '';
-      }
-
-      if (draftRecipientOrSubject.isEmpty) {
-        draftRecipientOrSubject =
-            emailMap['subject'] as String? ?? '(Thư nháp không có chủ đề)';
-      }
-      if (draftRecipientOrSubject.isEmpty) {
-        draftRecipientOrSubject = '(Thư nháp)';
-      }
-
-      return EmailData(
-        id: emailMap['id'] as String? ?? '',
-        senderName: 'Đến: $draftRecipientOrSubject',
-        subject: emailMap['subject'] as String? ?? '(Không có chủ đề)',
-        previewText: previewText,
-        body: body,
-        time: timeString,
-        isRead: true,
-        to:
-            (emailMap['to'] as List<dynamic>?)
-                ?.map((e) => e as Map<String, dynamic>)
-                .map(
-                  (recipientMap) => {
-                    'userId': recipientMap['userId'] as String? ?? '',
-                    'displayName': recipientMap['displayName'] as String? ?? '',
-                  },
-                )
-                .toList() ??
-            [],
+    try {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
       );
-    }).toList();
+      final emailsData = await firestoreService.getEmails(userId, folder);
+
+      if (!mounted) return [];
+
+      return emailsData.map((emailMap) {
+        Timestamp? timestamp = emailMap['timestamp'] as Timestamp?;
+        String timeString = 'N/A';
+        if (timestamp != null) {
+          try {
+            timeString = timestamp.toDate().toLocal().toString();
+          } catch (e) {
+            print(
+              "Error converting timestamp: $e for email ID ${emailMap['id']}",
+            );
+          }
+        }
+        String body = emailMap['body'] as String? ?? '';
+        String previewText =
+            body.length > 50 ? '${body.substring(0, 50)}...' : body;
+
+        String draftRecipientOrSubject = '';
+
+        final toList = emailMap['to'] as List<dynamic>?;
+        if (toList != null && toList.isNotEmpty) {
+          final firstTo = toList[0] as Map<String, dynamic>?;
+          draftRecipientOrSubject = firstTo?['displayName'] as String? ?? '';
+        }
+
+        if (draftRecipientOrSubject.isEmpty) {
+          draftRecipientOrSubject =
+              emailMap['subject'] as String? ?? '(Thư nháp không có chủ đề)';
+        }
+        if (draftRecipientOrSubject.isEmpty) {
+          draftRecipientOrSubject = '(Thư nháp)';
+        }
+
+        return EmailData(
+          id: emailMap['id'] as String? ?? '',
+          senderName: 'Đến: $draftRecipientOrSubject',
+          subject: emailMap['subject'] as String? ?? '(Không có chủ đề)',
+          previewText: previewText,
+          body: body,
+          time: timeString,
+          isRead: true,
+          to:
+              (emailMap['to'] as List<dynamic>?)
+                  ?.map((e) => e as Map<String, dynamic>)
+                  .map(
+                    (recipientMap) => {
+                      'userId': recipientMap['userId'] as String? ?? '',
+                      'displayName':
+                          recipientMap['displayName'] as String? ?? '',
+                    },
+                  )
+                  .toList() ??
+              [],
+        );
+      }).toList();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi khi tải thư nháp: $e')));
+      }
+      return [];
+    }
   }
 
   Future<void> _handleDraftTap(EmailData draftEmail) async {
     if (!mounted) return;
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ComposeEmailScreen(draftToEdit: draftEmail),
       ),
     );
-    if (result == true) {
-      _loadEmails();
-    }
+    _loadEmails(); // Luôn tải lại danh sách sau khi quay lại
   }
 
   @override
@@ -149,48 +157,81 @@ class _DraftsScreenState extends State<DraftsScreen> {
           future: _emailsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(
-                child: Text('Lỗi khi tải thư nháp: ${snapshot.error}'),
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Đang tải thư nháp...'),
+                  ],
+                ),
               );
             }
-            final emails = snapshot.data ?? [];
-            if (emails.isEmpty) {
+            if (snapshot.hasError) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(
-                      Icons.edit_note_outlined,
+                      Icons.error_outline,
                       size: 60,
-                      color: Colors.grey,
+                      color: Colors.red,
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Không có thư nháp nào!',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    Text(
+                      'Lỗi khi tải thư nháp: ${snapshot.error}',
+                      style: const TextStyle(fontSize: 16, color: Colors.red),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       icon: const Icon(Icons.refresh),
-                      label: const Text('Tải lại'),
+                      label: const Text('Thử lại'),
                       onPressed: _loadEmails,
                     ),
                   ],
                 ),
               );
             }
+            final emails = snapshot.data ?? [];
+            if (emails.isEmpty) {
+              return Center(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.edit_note_outlined,
+                        size: 60,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Không có thư nháp nào!',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Tải lại'),
+                        onPressed: _loadEmails,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
             return ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
               itemCount: emails.length,
               itemBuilder: (context, index) {
                 final email = emails[index];
                 return EmailListItem(
                   email: email,
                   onTap: () => _handleDraftTap(email),
-                  onReadStatusChanged:
-                      _loadEmails, // Làm mới danh sách khi trạng thái thay đổi
+                  onReadStatusChanged: _loadEmails,
                 );
               },
             );
