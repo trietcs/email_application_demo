@@ -209,4 +209,56 @@ class FirestoreService {
       throw e;
     }
   }
+
+  Future<void> updateDraft({
+    required String userId,
+    required String draftId,
+    required String senderDisplayName,
+    required List<Map<String, String>> recipients,
+    required String subject,
+    required String body,
+  }) async {
+    try {
+      final draftRef = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(draftId);
+
+      await draftRef.update({
+        'from': {'userId': userId, 'displayName': senderDisplayName},
+        'to': recipients,
+        'subject': subject,
+        'body': body,
+        'timestamp': FieldValue.serverTimestamp(),
+        'folder': 'drafts',
+        'isRead': true,
+        'isStarred': false,
+        'attachments': [],
+      });
+      print(
+        'FirestoreService: Cập nhật nháp thành công cho user $userId với ID $draftId',
+      );
+    } catch (e) {
+      print('Error updating draft: $e');
+      throw e;
+    }
+  }
+
+  Future<void> deleteEmailPermanently({
+    required String userId,
+    required String emailId,
+  }) async {
+    try {
+      final emailRef = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId);
+
+      await emailRef.delete();
+      print('FirestoreService: Xóa vĩnh viễn email $emailId cho user $userId');
+    } catch (e) {
+      print('Error permanently deleting email: $e');
+      throw e;
+    }
+  }
 }
