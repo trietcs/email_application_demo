@@ -139,4 +139,41 @@ class FirestoreService {
       return null;
     }
   }
+
+  Future<void> deleteEmail({
+    required String userId,
+    required String emailId,
+    String? targetFolder, // 'trash' hoặc null để xóa hẳn
+  }) async {
+    try {
+      if (targetFolder == 'trash') {
+        final emailRef = usersCollection
+            .doc(userId)
+            .collection('userEmails')
+            .doc(emailId);
+        final emailData =
+            (await emailRef.get()).data() as Map<String, dynamic>?;
+        if (emailData != null) {
+          await emailRef.delete();
+          await usersCollection.doc(userId).collection('userEmails').add({
+            ...emailData,
+            'folder': 'trash',
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        await usersCollection
+            .doc(userId)
+            .collection('userEmails')
+            .doc(emailId)
+            .delete();
+      }
+      print(
+        'FirestoreService: Email $emailId đã được ${targetFolder == 'trash' ? 'chuyển vào thùng rác' : 'xóa'} cho user $userId',
+      );
+    } catch (e) {
+      print('Error deleting email: $e');
+      throw e;
+    }
+  }
 }
