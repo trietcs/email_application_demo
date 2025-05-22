@@ -84,4 +84,34 @@ class AuthService {
       print('AuthService SignOut Error: Lỗi khi đăng xuất - ${e.toString()}');
     }
   }
+
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        return 'Không có người dùng nào đang đăng nhập.';
+      }
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      );
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(newPassword);
+      print('AuthService: Đổi mật khẩu thành công cho ${user.email}');
+      return null; // Không có lỗi
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password') {
+        return 'Mật khẩu hiện tại không đúng.';
+      } else if (e.code == 'weak-password') {
+        return 'Mật khẩu mới quá yếu. Vui lòng chọn mật khẩu mạnh hơn.';
+      } else {
+        return 'Lỗi khi đổi mật khẩu: ${e.message}';
+      }
+    } catch (e) {
+      return 'Lỗi không xác định: ${e.toString()}';
+    }
+  }
 }
