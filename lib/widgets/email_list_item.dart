@@ -1,12 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
+import 'package:email_application/services/auth_service.dart';
+import 'package:email_application/services/firestore_service.dart';
 import 'package:intl/intl.dart';
 
-class EmailListItem extends StatelessWidget {
+class EmailListItem extends StatefulWidget {
   final EmailData email;
   final VoidCallback? onTap;
+  final VoidCallback? onReadStatusChanged; // Callback để thông báo cha làm mới
 
-  const EmailListItem({super.key, required this.email, this.onTap});
+  const EmailListItem({
+    super.key,
+    required this.email,
+    this.onTap,
+    this.onReadStatusChanged,
+  });
+
+  @override
+  State<EmailListItem> createState() => _EmailListItemState();
+}
+
+class _EmailListItemState extends State<EmailListItem> {
+  late EmailData email;
+
+  @override
+  void initState() {
+    super.initState();
+    email = widget.email;
+  }
 
   String _formatDateTime(String dateTimeString) {
     try {
@@ -36,6 +58,126 @@ class EmailListItem extends StatelessWidget {
     }
   }
 
+  Future<void> _toggleReadStatus(BuildContext context) async {
+    final firestoreService = Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    );
+    final userId =
+        Provider.of<AuthService>(context, listen: false).currentUser?.uid;
+    final scaffoldMessenger = ScaffoldMessenger.of(context); // Lưu trước
+
+    if (userId == null) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Vui lòng đăng nhập để thực hiện hành động này'),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      await firestoreService.markEmailAsRead(
+        userId: userId,
+        emailId: email.id,
+        isRead: !email.isRead,
+      );
+      if (mounted) {
+        setState(() {
+          email.isRead = !email.isRead;
+        });
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              email.isRead ? 'Đã đánh dấu đã đọc' : 'Đã đánh dấu chưa đọc',
+            ),
+          ),
+        );
+      }
+      widget.onReadStatusChanged?.call(); // Thông báo cha làm mới danh sách
+    } catch (e) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi thay đổi trạng thái: ${e.toString()}'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteEmail(BuildContext context) async {
+    // Lưu các service và state trước khi thực hiện tác vụ bất đồng bộ
+    final firestoreService = Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    );
+    final userId =
+        Provider.of<AuthService>(context, listen: false).currentUser?.uid;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    if (userId == null) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Vui lòng đăng nhập để thực hiện hành động này'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Xác nhận xóa'),
+          content: const Text(
+            'Bạn có chắc chắn muốn chuyển thư này vào thùng rác không?',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Hủy'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+            ),
+            TextButton(
+              child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await firestoreService.deleteEmail(
+        userId: userId,
+        emailId: email.id,
+        targetFolder: 'trash',
+      );
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Đã chuyển thư vào thùng rác')),
+        );
+      }
+      widget.onReadStatusChanged?.call(); // Thông báo cha làm mới danh sách
+    } catch (e) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Lỗi khi xóa thư: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isUnread = !email.isRead;
@@ -44,7 +186,41 @@ class EmailListItem extends StatelessWidget {
         isUnread ? FontWeight.bold : FontWeight.normal;
 
     return InkWell(
-      onTap: onTap,
+      onTap: widget.onTap,
+      onLongPress: () {
+        showModalBottomSheet(
+          context: context,
+          builder:
+              (context) => SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: Icon(
+                        email.isRead ? Icons.mail_outline : Icons.mail,
+                        color: email.isRead ? Colors.blue : Colors.grey,
+                      ),
+                      title: Text(
+                        email.isRead ? 'Đánh dấu chưa đọc' : 'Đánh dấu đã đọc',
+                      ),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _toggleReadStatus(context);
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.delete, color: Colors.red),
+                      title: const Text('Xóa'),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _deleteEmail(context);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+        );
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         decoration: BoxDecoration(

@@ -112,8 +112,6 @@ class _InboxScreenState extends State<InboxScreen> {
 
     bool wasInitiallyUnread = !email.isRead;
 
-    if (wasInitiallyUnread) {}
-
     final resultFromView = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -207,6 +205,8 @@ class _InboxScreenState extends State<InboxScreen> {
                 return EmailListItem(
                   email: email,
                   onTap: () => _handleEmailTap(email),
+                  onReadStatusChanged:
+                      _loadEmails, // Làm mới danh sách khi trạng thái thay đổi
                 );
               },
             );
