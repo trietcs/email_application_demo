@@ -243,4 +243,22 @@ class FirestoreService {
       throw e;
     }
   }
+
+  Future<void> deleteEmailPermanently({
+    required String userId,
+    required String emailId,
+  }) async {
+    try {
+      final emailRef = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId);
+
+      await emailRef.delete();
+      print('FirestoreService: Xóa vĩnh viễn email $emailId cho user $userId');
+    } catch (e) {
+      print('Error permanently deleting email: $e');
+      throw e;
+    }
+  }
 }
