@@ -194,7 +194,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       context,
       listen: false,
     );
-    final scaffoldMessenger = ScaffoldMessenger.of(context); // Lưu trước
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final String senderId = currentUser.uid;
     final String senderDisplayName =
         currentUser.displayName?.isNotEmpty == true
@@ -224,13 +224,11 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
 
     try {
       String? savedDraftId;
-      // Nếu đang chỉnh sửa nháp, sử dụng updateDraft (sẽ tích hợp sau)
       if (_editingDraftId.isNotEmpty) {
         print(
-          "TODO: Call API updateDraft for draft ID: $_editingDraftId (Waiting for Triết to implement)",
+          "TODO: Call API updateDraft for draft ID: $_editingDraftId", //(Waiting for Triết to implement)
         );
       } else {
-        // Gọi API saveDraft để lưu nháp mới
         savedDraftId = await firestoreService.saveDraft(
           userId: senderId,
           senderDisplayName: senderDisplayName,
@@ -244,7 +242,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Đã lưu vào thư nháp')),
         );
-        Navigator.pop(context, false); // Quay lại mà không làm mới danh sách
+        Navigator.pop(context, false);
       }
     } catch (e) {
       if (mounted) {
@@ -279,7 +277,6 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
           icon: const Icon(Icons.close),
           tooltip: 'Hủy',
           onPressed: () async {
-            // Kiểm tra nếu có thay đổi so với trạng thái ban đầu
             bool hasChanges =
                 _toController.text.isNotEmpty ||
                 _subjectController.text.isNotEmpty ||
