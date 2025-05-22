@@ -101,6 +101,26 @@ class FirestoreService {
     }
   }
 
+  Future<void> markEmailAsRead({
+    required String userId,
+    required String emailId,
+    required bool isRead,
+  }) async {
+    try {
+      await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId)
+          .update({'isRead': isRead});
+      print(
+        'FirestoreService: Đánh dấu email $emailId thành $isRead cho user $userId',
+      );
+    } catch (e) {
+      print('Error marking email as read: $e');
+      throw e;
+    }
+  }
+
   Future<Map<String, String>?> findUserByContactInfo(String contactInfo) async {
     try {
       String email = '$contactInfo@tvamail.com';
