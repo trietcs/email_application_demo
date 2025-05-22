@@ -176,4 +176,37 @@ class FirestoreService {
       throw e;
     }
   }
+
+  Future<String> saveDraft({
+    required String userId,
+    required String senderDisplayName,
+    required List<Map<String, String>> recipients,
+    required String subject,
+    required String body,
+  }) async {
+    try {
+      final draftData = {
+        'from': {'userId': userId, 'displayName': senderDisplayName},
+        'to': recipients,
+        'subject': subject,
+        'body': body,
+        'timestamp': FieldValue.serverTimestamp(),
+        'folder': 'drafts',
+        'isRead': true,
+        'isStarred': false,
+        'attachments': [],
+      };
+      final docRef = await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .add(draftData);
+      print(
+        'FirestoreService: Lưu nháp thành công cho user $userId với ID ${docRef.id}',
+      );
+      return docRef.id;
+    } catch (e) {
+      print('Error saving draft: $e');
+      throw e;
+    }
+  }
 }
