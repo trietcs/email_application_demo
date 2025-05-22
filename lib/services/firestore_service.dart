@@ -101,6 +101,26 @@ class FirestoreService {
     }
   }
 
+  Future<void> markEmailAsRead({
+    required String userId,
+    required String emailId,
+    required bool isRead,
+  }) async {
+    try {
+      await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId)
+          .update({'isRead': isRead});
+      print(
+        'FirestoreService: Đánh dấu email $emailId thành $isRead cho user $userId',
+      );
+    } catch (e) {
+      print('Error marking email as read: $e');
+      throw e;
+    }
+  }
+
   Future<Map<String, String>?> findUserByContactInfo(String contactInfo) async {
     try {
       String email = '$contactInfo@tvamail.com';
@@ -117,6 +137,76 @@ class FirestoreService {
     } catch (e) {
       print('Error finding user by contactInfo: $e');
       return null;
+    }
+  }
+
+  Future<void> deleteEmail({
+    required String userId,
+    required String emailId,
+    String? targetFolder, // 'trash' hoặc null để xóa hẳn
+  }) async {
+    try {
+      if (targetFolder == 'trash') {
+        final emailRef = usersCollection
+            .doc(userId)
+            .collection('userEmails')
+            .doc(emailId);
+        final emailData =
+            (await emailRef.get()).data() as Map<String, dynamic>?;
+        if (emailData != null) {
+          await emailRef.delete();
+          await usersCollection.doc(userId).collection('userEmails').add({
+            ...emailData,
+            'folder': 'trash',
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        await usersCollection
+            .doc(userId)
+            .collection('userEmails')
+            .doc(emailId)
+            .delete();
+      }
+      print(
+        'FirestoreService: Email $emailId đã được ${targetFolder == 'trash' ? 'chuyển vào thùng rác' : 'xóa'} cho user $userId',
+      );
+    } catch (e) {
+      print('Error deleting email: $e');
+      throw e;
+    }
+  }
+
+  Future<String> saveDraft({
+    required String userId,
+    required String senderDisplayName,
+    required List<Map<String, String>> recipients,
+    required String subject,
+    required String body,
+  }) async {
+    try {
+      final draftData = {
+        'from': {'userId': userId, 'displayName': senderDisplayName},
+        'to': recipients,
+        'subject': subject,
+        'body': body,
+        'timestamp': FieldValue.serverTimestamp(),
+        'folder': 'drafts',
+        'isRead': true,
+        'isStarred': false,
+        'attachments': [],
+      };
+      final docRef = await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .add(draftData);
+      print(
+        'FirestoreService: Lưu nháp thành công cho user $userId với ID ${docRef.id}',
+      );
+      return docRef.id;
+    } catch (e) {
+      print('Error saving draft: $e');
+      throw e;
     }
   }
 }

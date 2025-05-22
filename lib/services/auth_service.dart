@@ -84,4 +84,49 @@ class AuthService {
       print('AuthService SignOut Error: Lỗi khi đăng xuất - ${e.toString()}');
     }
   }
+
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        return 'Vui lòng đăng nhập lại để thực hiện thao tác này.';
+      }
+      if (user.email == null) {
+        return 'Không tìm thấy thông tin email để xác thực lại.';
+      }
+
+      final AuthCredential credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+
+      await user.updatePassword(newPassword);
+      print('AuthService: Đổi mật khẩu thành công cho ${user.email}');
+      return null;
+    } on FirebaseAuthException catch (e) {
+      print('AuthService ChangePassword Error Code: ${e.code}');
+      if (e.code == 'wrong-password') {
+        return 'Mật khẩu hiện tại không đúng. Vui lòng thử lại.';
+      } else if (e.code == 'weak-password') {
+        return 'Mật khẩu mới quá yếu. Vui lòng chọn mật khẩu mạnh hơn (ít nhất 6 ký tự).';
+      } else if (e.code == 'user-mismatch' ||
+          e.code == 'user-not-found' ||
+          e.code == 'invalid-credential' ||
+          e.code == 'ERROR_INVALID_CREDENTIAL') {
+        return 'Mật khẩu hiện tại không đúng. Vui lòng thử lại.';
+      } else if (e.code == 'requires-recent-login') {
+        return 'Phiên đăng nhập của bạn đã cũ. Vui lòng đăng xuất và đăng nhập lại trước khi đổi mật khẩu.';
+      }
+      print('AuthService ChangePassword Firebase Error: ${e.message}');
+      return 'Lỗi khi đổi mật khẩu: ${e.message} (Mã: ${e.code})';
+    } catch (e) {
+      print('AuthService ChangePassword Unknown Error: ${e.toString()}');
+      return 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.';
+    }
+  }
 }
