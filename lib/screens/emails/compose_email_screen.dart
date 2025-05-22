@@ -194,6 +194,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       context,
       listen: false,
     );
+    final scaffoldMessenger = ScaffoldMessenger.of(context); // Lưu trước
     final String senderId = currentUser.uid;
     final String senderDisplayName =
         currentUser.displayName?.isNotEmpty == true
@@ -221,35 +222,33 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       }
     }
 
-    final Map<String, dynamic> emailData = {
-      'from': {'userId': senderId, 'displayName': senderDisplayName},
-      'to': recipientsDataForDraft,
-      'subject': _subjectController.text,
-      'body': _bodyController.text,
-      'timestamp': FieldValue.serverTimestamp(),
-      'folder': 'drafts',
-      'isRead': true,
-      'isStarred': false,
-      'attachments': [],
-    };
-
     try {
       String? savedDraftId;
-      print(
-        "TODO: Call API saveDraft/updateDraft. EditingDraftId: $_editingDraftId",
-      );
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Nếu đang chỉnh sửa nháp, sử dụng updateDraft (sẽ tích hợp sau)
+      if (_editingDraftId.isNotEmpty) {
+        print(
+          "TODO: Call API updateDraft for draft ID: $_editingDraftId (Waiting for Triết to implement)",
+        );
+      } else {
+        // Gọi API saveDraft để lưu nháp mới
+        savedDraftId = await firestoreService.saveDraft(
+          userId: senderId,
+          senderDisplayName: senderDisplayName,
+          recipients: recipientsDataForDraft,
+          subject: _subjectController.text,
+          body: _bodyController.text,
+        );
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã lưu vào thư nháp (Chức năng chờ API).'),
-          ),
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Đã lưu vào thư nháp')),
         );
+        Navigator.pop(context, false); // Quay lại mà không làm mới danh sách
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Lưu nháp thất bại: ${e.toString()}')),
         );
       }
@@ -276,6 +275,64 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Soạn thư'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Hủy',
+          onPressed: () async {
+            // Kiểm tra nếu có thay đổi so với trạng thái ban đầu
+            bool hasChanges =
+                _toController.text.isNotEmpty ||
+                _subjectController.text.isNotEmpty ||
+                _bodyController.text.isNotEmpty;
+
+            if (widget.replyToEmail != null ||
+                widget.forwardEmail != null ||
+                widget.draftToEdit != null) {
+              hasChanges =
+                  _toController.text != widget.replyToEmail?.senderName &&
+                  _toController.text !=
+                      (widget.draftToEdit?.to
+                              .map((r) => r['displayName'])
+                              .where((s) => s?.isNotEmpty ?? false)
+                              .join(', ') ??
+                          '') &&
+                  _subjectController.text != widget.replyToEmail?.subject &&
+                  _subjectController.text != widget.forwardEmail?.subject &&
+                  _subjectController.text != widget.draftToEdit?.subject &&
+                  _bodyController.text != widget.replyToEmail?.body &&
+                  _bodyController.text != widget.forwardEmail?.body &&
+                  _bodyController.text != widget.draftToEdit?.body;
+            }
+
+            if (hasChanges) {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder:
+                    (context) => AlertDialog(
+                      title: const Text('Xác nhận'),
+                      content: const Text(
+                        'Bạn có muốn hủy email này không? Nội dung sẽ không được lưu.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Không'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text(
+                            'Hủy',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+              );
+              if (confirmed != true) return;
+            }
+            Navigator.pop(context, false);
+          },
+        ),
         actions: [
           if (_isSavingDraft || _isSending)
             Padding(
