@@ -153,8 +153,9 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       );
 
       if (_editingDraftId.isNotEmpty) {
-        print(
-          "TODO: Call API deleteEmailPermanently for draft ID: $_editingDraftId",
+        await firestoreService.deleteEmailPermanently(
+          userId: senderId,
+          emailId: _editingDraftId,
         );
       }
 
@@ -224,10 +225,15 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
 
     try {
       String? savedDraftId;
-      // Nếu đang chỉnh sửa nháp, sử dụng updateDraft (sẽ tích hợp sau)
+      // Nếu đang chỉnh sửa nháp, sử dụng updateDraft
       if (_editingDraftId.isNotEmpty) {
-        print(
-          "TODO: Call API updateDraft for draft ID: $_editingDraftId (Waiting for Triết to implement)",
+        await firestoreService.updateDraft(
+          userId: senderId,
+          draftId: _editingDraftId,
+          senderDisplayName: senderDisplayName,
+          recipients: recipientsDataForDraft,
+          subject: _subjectController.text,
+          body: _bodyController.text,
         );
       } else {
         // Gọi API saveDraft để lưu nháp mới
