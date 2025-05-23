@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:email_application/models/email_data.dart';
+import 'package:email_application/screens/models/email_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 class EmailListItem extends StatefulWidget {
   final EmailData email;
   final VoidCallback? onTap;
-  final VoidCallback? onReadStatusChanged; // Callback để thông báo cha làm mới
+  final VoidCallback? onReadStatusChanged;
 
   const EmailListItem({
     super.key,
@@ -35,26 +35,33 @@ class _EmailListItemState extends State<EmailListItem> {
       final dateTime = DateTime.parse(dateTimeString).toLocal();
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final yesterday = DateTime(now.year, now.month, now.day - 1);
+      final yesterday = today.subtract(const Duration(days: 1));
 
-      if (dateTime.year == today.year &&
+      final isToday =
+          dateTime.year == today.year &&
           dateTime.month == today.month &&
-          dateTime.day == today.day) {
-        return DateFormat.Hm('vi_VN').format(dateTime);
-      } else if (dateTime.year == yesterday.year &&
+          dateTime.day == today.day;
+
+      final isYesterday =
+          dateTime.year == yesterday.year &&
           dateTime.month == yesterday.month &&
-          dateTime.day == yesterday.day) {
-        return 'Hôm qua';
+          dateTime.day == yesterday.day;
+
+      if (isToday) {
+        return DateFormat.Hm('en_US').format(dateTime); // e.g., 14:30
+      } else if (isYesterday) {
+        return 'Yesterday';
       } else if (dateTime.year == now.year) {
-        return DateFormat('dd MMM', 'vi_VN').format(dateTime);
+        return DateFormat('MMM d', 'en_US').format(dateTime); // e.g., May 23
       } else {
-        return DateFormat('dd/MM/yy', 'vi_VN').format(dateTime);
+        return DateFormat(
+          'MM/dd/yy',
+          'en_US',
+        ).format(dateTime); // e.g., 12/01/24
       }
     } catch (e) {
-      print(
-        "Error formatting time in EmailListItem: $e for time string: $dateTimeString",
-      );
-      return dateTimeString.split(' ')[0];
+      print("Error formatting time: $e for time string: $dateTimeString");
+      return dateTimeString.split(' ').first;
     }
   }
 
@@ -65,14 +72,12 @@ class _EmailListItemState extends State<EmailListItem> {
     );
     final userId =
         Provider.of<AuthService>(context, listen: false).currentUser?.uid;
-    final scaffoldMessenger = ScaffoldMessenger.of(context); // Lưu trước
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (userId == null) {
       if (mounted) {
         scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('Vui lòng đăng nhập để thực hiện hành động này'),
-          ),
+          const SnackBar(content: Text('Please sign in to continue')),
         );
       }
       return;
@@ -90,26 +95,21 @@ class _EmailListItemState extends State<EmailListItem> {
         });
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(
-              email.isRead ? 'Đã đánh dấu đã đọc' : 'Đã đánh dấu chưa đọc',
-            ),
+            content: Text(email.isRead ? 'Mark as unread' : 'Mark as read'),
           ),
         );
       }
-      widget.onReadStatusChanged?.call(); // Thông báo cha làm mới danh sách
+      widget.onReadStatusChanged?.call();
     } catch (e) {
       if (mounted) {
         scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('Lỗi khi thay đổi trạng thái: ${e.toString()}'),
-          ),
+          SnackBar(content: Text('Error changing status: ${e.toString()}')),
         );
       }
     }
   }
 
   Future<void> _deleteEmail(BuildContext context) async {
-    // Lưu các service và state trước khi thực hiện tác vụ bất đồng bộ
     final firestoreService = Provider.of<FirestoreService>(
       context,
       listen: false,
@@ -121,9 +121,7 @@ class _EmailListItemState extends State<EmailListItem> {
     if (userId == null) {
       if (mounted) {
         scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('Vui lòng đăng nhập để thực hiện hành động này'),
-          ),
+          const SnackBar(content: Text('Please sign in to continue')),
         );
       }
       return;
@@ -133,19 +131,19 @@ class _EmailListItemState extends State<EmailListItem> {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('Xác nhận xóa'),
+          title: const Text('Confirm Deletion'),
           content: const Text(
-            'Bạn có chắc chắn muốn chuyển thư này vào thùng rác không?',
+            'Are you sure you want to move this email to the trash?',
           ),
           actions: <Widget>[
             TextButton(
-              child: const Text('Hủy'),
+              child: const Text('Cancel'),
               onPressed: () {
                 Navigator.of(dialogContext).pop(false);
               },
             ),
             TextButton(
-              child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
               onPressed: () {
                 Navigator.of(dialogContext).pop(true);
               },
@@ -165,14 +163,14 @@ class _EmailListItemState extends State<EmailListItem> {
       );
       if (mounted) {
         scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Đã chuyển thư vào thùng rác')),
+          const SnackBar(content: Text('Moved to Trash')),
         );
       }
-      widget.onReadStatusChanged?.call(); // Thông báo cha làm mới danh sách
+      widget.onReadStatusChanged?.call();
     } catch (e) {
       if (mounted) {
         scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('Lỗi khi xóa thư: ${e.toString()}')),
+          SnackBar(content: Text('Error deleting email: ${e.toString()}')),
         );
       }
     }
@@ -201,7 +199,7 @@ class _EmailListItemState extends State<EmailListItem> {
                         color: email.isRead ? Colors.blue : Colors.grey,
                       ),
                       title: Text(
-                        email.isRead ? 'Đánh dấu chưa đọc' : 'Đánh dấu đã đọc',
+                        email.isRead ? 'Mark as unread' : 'Mark as read',
                       ),
                       onTap: () async {
                         Navigator.pop(context);
@@ -210,7 +208,7 @@ class _EmailListItemState extends State<EmailListItem> {
                     ),
                     ListTile(
                       leading: const Icon(Icons.delete, color: Colors.red),
-                      title: const Text('Xóa'),
+                      title: const Text('Delete'),
                       onTap: () async {
                         Navigator.pop(context);
                         await _deleteEmail(context);
@@ -270,9 +268,7 @@ class _EmailListItemState extends State<EmailListItem> {
                   ),
                   const SizedBox(height: 2.0),
                   Text(
-                    email.subject.isNotEmpty
-                        ? email.subject
-                        : '(Không có chủ đề)',
+                    email.subject.isNotEmpty ? email.subject : '(No Subject)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -285,7 +281,7 @@ class _EmailListItemState extends State<EmailListItem> {
                   Text(
                     email.previewText.isNotEmpty
                         ? email.previewText
-                        : '(Không có nội dung xem trước)',
+                        : '(No preview content)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 14, color: Colors.grey[600]),

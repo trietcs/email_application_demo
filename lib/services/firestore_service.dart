@@ -3,24 +3,139 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-
   CollectionReference get usersCollection => _db.collection('users');
 
   Future<void> createUserProfile({
     required User user,
     required String phoneNumber,
+    required String customEmail,
     String? displayName,
+    String? gender,
+    DateTime? dateOfBirth,
+    String? photoURL,
+    bool isProfileFullyCompleted = false,
   }) async {
     try {
-      await usersCollection.doc(user.uid).set({
+      Timestamp? dobTimestamp =
+          dateOfBirth != null ? Timestamp.fromDate(dateOfBirth) : null;
+      Map<String, dynamic> profileData = {
+        'uid': user.uid,
         'phoneNumber': phoneNumber,
+        'customEmail': customEmail,
+        'authEmail': user.email,
         'displayName': displayName ?? '',
-        'email': user.email ?? '',
+        'gender': gender,
+        'dateOfBirth': dobTimestamp,
+        'photoURL': photoURL,
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (isProfileFullyCompleted) {
+        profileData['profileCompletedAt'] = FieldValue.serverTimestamp();
+      }
+
+      await usersCollection
+          .doc(user.uid)
+          .set(profileData, SetOptions(merge: true));
+      print(
+        'FirestoreService: User profile created/updated for UID ${user.uid}',
+      );
     } catch (e) {
-      print('Error creating user profile: $e');
+      print('Error creating/updating user profile: $e');
       throw e;
+    }
+  }
+
+  Future<void> updateUserProfile(
+    String userId, {
+    String? displayName,
+    String? gender,
+    DateTime? dateOfBirth,
+    String? photoURL,
+  }) async {
+    try {
+      Map<String, dynamic> dataToUpdate = {};
+      if (displayName != null) dataToUpdate['displayName'] = displayName;
+      if (gender != null) dataToUpdate['gender'] = gender;
+      if (dateOfBirth != null)
+        dataToUpdate['dateOfBirth'] = Timestamp.fromDate(dateOfBirth);
+      if (photoURL != null) dataToUpdate['photoURL'] = photoURL;
+
+      if (dataToUpdate.isNotEmpty) {
+        dataToUpdate['updatedAt'] = FieldValue.serverTimestamp();
+        await usersCollection.doc(userId).update(dataToUpdate);
+        print(
+          'FirestoreService: User profile updated for UID $userId with data: $dataToUpdate',
+        );
+      }
+    } catch (e) {
+      print('Error updating user profile for UID $userId: $e');
+      throw e;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getUserProfile(String userId) async {
+    try {
+      DocumentSnapshot doc = await usersCollection.doc(userId).get();
+      if (doc.exists) {
+        return doc.data() as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting user profile: $e');
+      return null;
+    }
+  }
+
+  Future<String?> getEmailForPhoneNumber(String e164PhoneNumber) async {
+    try {
+      final docSnapshot =
+          await _db
+              .collection('phoneNumberToEmailLookup')
+              .doc(e164PhoneNumber)
+              .get();
+      if (docSnapshot.exists) {
+        return docSnapshot.data()?['customEmail'] as String?;
+      }
+      return null;
+    } catch (e) {
+      print(
+        'Error fetching email for phone number $e164PhoneNumber from lookup: $e',
+      );
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        print(
+          'PERMISSION DENIED while fetching from phoneNumberToEmailLookup. Check rules.',
+        );
+      }
+      return null;
+    }
+  }
+
+  Future<Map<String, String>?> findUserByContactInfo(String contactInfo) async {
+    try {
+      String emailToFind = contactInfo;
+      if (!contactInfo.contains('@')) {
+        emailToFind = '$contactInfo@tvamail.com';
+      }
+
+      final snapshot =
+          await usersCollection
+              .where('customEmail', isEqualTo: emailToFind)
+              .limit(1)
+              .get();
+      if (snapshot.docs.isEmpty) return null;
+
+      final userDoc = snapshot.docs.first;
+      final userData = userDoc.data() as Map<String, dynamic>?;
+      if (userData == null) return null;
+
+      return {
+        'userId': userDoc.id,
+        'displayName': userData['displayName'] as String? ?? '',
+      };
+    } catch (e) {
+      print('Error finding user by contactInfo ($contactInfo): $e');
+      return null;
     }
   }
 
@@ -36,25 +151,10 @@ class FirestoreService {
               .where('folder', isEqualTo: folder)
               .orderBy('timestamp', descending: true)
               .get();
-      return snapshot.docs
-          .map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id})
-          .toList();
+      return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
     } catch (e) {
       print('Error getting emails for folder $folder: $e');
       return [];
-    }
-  }
-
-  Future<void> updateUserProfile(String userId, {String? displayName}) async {
-    try {
-      Map<String, dynamic> dataToUpdate = {};
-      if (displayName != null) dataToUpdate['displayName'] = displayName;
-      if (dataToUpdate.isNotEmpty) {
-        await usersCollection.doc(userId).update(dataToUpdate);
-      }
-    } catch (e) {
-      print('Error updating user profile: $e');
-      throw e;
     }
   }
 
@@ -121,29 +221,10 @@ class FirestoreService {
     }
   }
 
-  Future<Map<String, String>?> findUserByContactInfo(String contactInfo) async {
-    try {
-      String email = '$contactInfo@tvamail.com';
-      final snapshot =
-          await usersCollection.where('email', isEqualTo: email).limit(1).get();
-      if (snapshot.docs.isEmpty) return null;
-      final userDoc = snapshot.docs.first;
-      final userData = userDoc.data() as Map<String, dynamic>?;
-      if (userData == null) return null;
-      return {
-        'userId': userDoc.id,
-        'displayName': userData['displayName'] as String? ?? '',
-      };
-    } catch (e) {
-      print('Error finding user by contactInfo: $e');
-      return null;
-    }
-  }
-
   Future<void> deleteEmail({
     required String userId,
     required String emailId,
-    String? targetFolder, // 'trash' hoặc null để xóa hẳn
+    String? targetFolder,
   }) async {
     try {
       if (targetFolder == 'trash') {
@@ -151,8 +232,7 @@ class FirestoreService {
             .doc(userId)
             .collection('userEmails')
             .doc(emailId);
-        final emailData =
-            (await emailRef.get()).data() as Map<String, dynamic>?;
+        final emailData = (await emailRef.get()).data();
         if (emailData != null) {
           await emailRef.delete();
           await usersCollection.doc(userId).collection('userEmails').add({

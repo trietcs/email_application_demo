@@ -4,70 +4,112 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Stream<User?> get user => _auth.authStateChanges();
-
+  Stream<User?> get userChanges => _auth.userChanges();
   User? get currentUser => _auth.currentUser;
 
-  Future<User?> signUp({
+  Future<void> sendOtp({
     required String phoneNumber,
+    required Function(FirebaseAuthException) verificationFailed,
+    required Function(String verificationId, int? resendToken) codeSent,
+    required Function(String verificationId) codeAutoRetrievalTimeout,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        print('AuthService: Phone verification completed automatically.');
+      },
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+      timeout: timeout,
+    );
+  }
+
+  Future<User?> registerWithEmailAndPassword({
+    required String email,
     required String password,
-    String? displayName,
   }) async {
     try {
-      String email = '$phoneNumber@tvamail.com';
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
-      if (userCredential.user != null && displayName != null) {
-        await userCredential.user!.updateDisplayName(displayName);
-      }
-      print('AuthService: SignUp successful for $email');
+      print('AuthService: Email/Password registration successful for $email');
       return userCredential.user;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'weak-password') {
-        print('AuthService SignUp Error: Mật khẩu quá yếu.');
-      } else if (e.code == 'email-already-in-use') {
-        print('AuthService SignUp Error: Số điện thoại này đã được sử dụng.');
-      } else if (e.code == 'invalid-email') {
-        print('AuthService SignUp Error: Số điện thoại không hợp lệ.');
-      } else {
-        print('AuthService SignUp Error: ${e.message}');
-      }
-      return null;
+      print(
+        'AuthService: Email/Password registration error: ${e.code} - ${e.message}',
+      );
+      throw e;
     } catch (e) {
-      print('AuthService SignUp Error: Lỗi không xác định - ${e.toString()}');
-      return null;
+      print(
+        'AuthService: Email/Password registration unknown error: ${e.toString()}',
+      );
+      throw e;
     }
   }
 
-  Future<User?> signIn({
-    required String phoneNumber,
+  Future<User?> signInWithEmailAndPassword({
+    required String email,
     required String password,
   }) async {
     try {
-      String email = '$phoneNumber@tvamail.com';
+      String emailToSignIn = email.trim();
+      if (!emailToSignIn.contains('@')) {
+        emailToSignIn = '$emailToSignIn@tvamail.com';
+      } else if (!emailToSignIn.endsWith('@tvamail.com')) {
+        throw FirebaseAuthException(
+          code: 'invalid-email',
+          message: 'Invalid email format. Email must end with @tvamail.com.',
+        );
+      }
+
       UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
+        email: emailToSignIn,
         password: password,
       );
-      print('AuthService: SignIn successful for $email');
+      print(
+        'AuthService: Email/Password sign-in successful for $emailToSignIn',
+      );
       return userCredential.user;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        print(
-          'AuthService SignIn Error: Không tìm thấy người dùng với số điện thoại này.',
-        );
-      } else if (e.code == 'wrong-password') {
-        print('AuthService SignIn Error: Sai mật khẩu.');
-      } else if (e.code == 'invalid-email') {
-        print('AuthService SignIn Error: Số điện thoại không hợp lệ.');
-      } else if (e.code == 'invalid-credential') {
-        print('AuthService SignIn Error: Thông tin đăng nhập không hợp lệ.');
-      } else {
-        print('AuthService SignIn Error: ${e.message}');
-      }
-      return null;
+      print(
+        'AuthService Email/Password Sign-in FirebaseAuthException: Code: ${e.code}, Message: ${e.message}',
+      );
+      throw e;
     } catch (e) {
-      print('AuthService SignIn Error: Lỗi không xác định - ${e.toString()}');
-      return null;
+      print(
+        'AuthService Email/Password Sign-in General Error: ${e.toString()}',
+      );
+      throw Exception(
+        'An unexpected error occurred during email/password sign-in.',
+      );
+    }
+  }
+
+  Future<User?> signInWithPhoneOtp({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    try {
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+      UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
+      print(
+        'AuthService: Phone OTP sign-in successful for UID: ${userCredential.user?.uid}',
+      );
+      return userCredential.user;
+    } on FirebaseAuthException catch (e) {
+      print(
+        'AuthService Phone OTP Sign-in FirebaseAuthException: Code: ${e.code}, Message: ${e.message}',
+      );
+      throw e;
+    } catch (e) {
+      print('AuthService Phone OTP Sign-in General Error: ${e.toString()}');
+      throw Exception('An unexpected error occurred during phone OTP sign-in.');
     }
   }
 
@@ -76,12 +118,16 @@ class AuthService {
       final user = _auth.currentUser;
       if (user != null) {
         await _auth.signOut();
-        print('AuthService: SignOut successful for ${user.email}');
+        print(
+          'AuthService: Sign-out successful for ${user.email ?? user.phoneNumber}',
+        );
       } else {
         print('AuthService: No user to sign out.');
       }
     } catch (e) {
-      print('AuthService SignOut Error: Lỗi khi đăng xuất - ${e.toString()}');
+      print(
+        'AuthService Sign-out Error: Error while signing out - ${e.toString()}',
+      );
     }
   }
 
@@ -92,10 +138,10 @@ class AuthService {
     try {
       final user = _auth.currentUser;
       if (user == null) {
-        return 'Vui lòng đăng nhập lại để thực hiện thao tác này.';
+        return 'Please log in again to perform this action.';
       }
       if (user.email == null) {
-        return 'Không tìm thấy thông tin email để xác thực lại.';
+        return 'Email information not found for re-authentication.';
       }
 
       final AuthCredential credential = EmailAuthProvider.credential(
@@ -104,29 +150,26 @@ class AuthService {
       );
 
       await user.reauthenticateWithCredential(credential);
-
       await user.updatePassword(newPassword);
-      print('AuthService: Đổi mật khẩu thành công cho ${user.email}');
+      print('AuthService: Password changed successfully for ${user.email}');
       return null;
     } on FirebaseAuthException catch (e) {
       print('AuthService ChangePassword Error Code: ${e.code}');
-      if (e.code == 'wrong-password') {
-        return 'Mật khẩu hiện tại không đúng. Vui lòng thử lại.';
-      } else if (e.code == 'weak-password') {
-        return 'Mật khẩu mới quá yếu. Vui lòng chọn mật khẩu mạnh hơn (ít nhất 6 ký tự).';
-      } else if (e.code == 'user-mismatch' ||
-          e.code == 'user-not-found' ||
+      if (e.code == 'wrong-password' ||
+          e.code == 'user-mismatch' ||
           e.code == 'invalid-credential' ||
           e.code == 'ERROR_INVALID_CREDENTIAL') {
-        return 'Mật khẩu hiện tại không đúng. Vui lòng thử lại.';
+        return 'Incorrect current password. Please try again.';
+      } else if (e.code == 'weak-password') {
+        return 'New password is too weak. Please choose a stronger password (at least 6 characters).';
       } else if (e.code == 'requires-recent-login') {
-        return 'Phiên đăng nhập của bạn đã cũ. Vui lòng đăng xuất và đăng nhập lại trước khi đổi mật khẩu.';
+        return 'Your session is old. Please sign out and sign in again before changing password.';
       }
       print('AuthService ChangePassword Firebase Error: ${e.message}');
-      return 'Lỗi khi đổi mật khẩu: ${e.message} (Mã: ${e.code})';
+      return 'Failed to change password: ${e.message ?? e.code}';
     } catch (e) {
       print('AuthService ChangePassword Unknown Error: ${e.toString()}');
-      return 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.';
+      return 'An unexpected error occurred. Please try again later.';
     }
   }
 }

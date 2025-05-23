@@ -194,7 +194,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       context,
       listen: false,
     );
-    final scaffoldMessenger = ScaffoldMessenger.of(context); // Lưu trước
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final String senderId = currentUser.uid;
     final String senderDisplayName =
         currentUser.displayName?.isNotEmpty == true

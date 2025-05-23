@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:email_application/models/email_data.dart';
+import 'package:email_application/screens/models/email_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
-import 'package:email_application/screens/emails/compose_email_screen.dart';
+import 'package:email_application/screens/compose/compose_email_screen.dart';
 import 'package:email_application/widgets/email_list_item.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -138,7 +138,7 @@ class _DraftsScreenState extends State<DraftsScreen> {
         builder: (context) => ComposeEmailScreen(draftToEdit: draftEmail),
       ),
     );
-    _loadEmails(); // Luôn tải lại danh sách sau khi quay lại
+    _loadEmails();
   }
 
   @override
