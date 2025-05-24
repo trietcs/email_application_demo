@@ -81,12 +81,14 @@ class _InboxScreenState extends State<InboxScreen> {
       String previewText =
           body.length > 50 ? '${body.substring(0, 50)}...' : body;
 
+      Map<String, dynamic>? fromMap = emailMap['from'] as Map<String, dynamic>?;
+      String senderNameFromData = fromMap?['displayName'] as String? ?? 'N/A';
+      String senderEmailFromData = fromMap?['userId'] as String? ?? '';
+
       return EmailData(
         id: emailMap['id'] as String? ?? '',
-        senderName:
-            (emailMap['from'] as Map<String, dynamic>?)?['displayName']
-                as String? ??
-            'N/A',
+        senderName: senderNameFromData,
+        senderEmail: senderEmailFromData,
         subject: emailMap['subject'] as String? ?? '(No Subject)',
         previewText: previewText,
         body: body,
@@ -103,6 +105,22 @@ class _InboxScreenState extends State<InboxScreen> {
                 )
                 .toList() ??
             [],
+        cc:
+            (emailMap['cc'] as List<dynamic>?)
+                ?.map((e) => Map<String, String>.from(e as Map))
+                .toList() ??
+            [],
+        bcc:
+            (emailMap['bcc'] as List<dynamic>?)
+                ?.map((e) => Map<String, String>.from(e as Map))
+                .toList() ??
+            [],
+        attachments:
+            (emailMap['attachments'] as List<dynamic>?)
+                ?.map((e) => Map<String, String>.from(e as Map))
+                .toList() ??
+            [],
+        folder: emailMap['folder'] as String? ?? folder,
       );
     }).toList();
   }
@@ -147,7 +165,7 @@ class _InboxScreenState extends State<InboxScreen> {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  const SizedBox(height: 100),
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.2),
                   Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -178,9 +196,9 @@ class _InboxScreenState extends State<InboxScreen> {
             if (emails.isEmpty) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 100),
-                  Center(
+                children: [
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                  const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -209,6 +227,7 @@ class _InboxScreenState extends State<InboxScreen> {
                   email: email,
                   onTap: () => _handleEmailTap(email),
                   onReadStatusChanged: _loadEmails,
+                  onDeleteOrMove: _loadEmails,
                 );
               },
             );
