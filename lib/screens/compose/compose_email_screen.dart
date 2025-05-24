@@ -35,8 +35,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
   final _subjectController = TextEditingController();
   final _bodyController = TextEditingController();
 
-  bool _isSending = false;
-  bool _isSavingDraft = false;
+  bool _isProcessing = false;
   bool _showCcBccFields = false;
 
   String _editingDraftId = '';
@@ -51,14 +50,14 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
     _populateFields();
   }
 
-  void _populateFields() {
-    String formatRecipientForField(Map<String, String> recipient) {
-      return recipient['displayName'] ?? recipient['userId'] ?? '';
-    }
+  String _formatRecipientForDisplay(Map<String, String> recipientMap) {
+    return recipientMap['displayName'] ?? recipientMap['userId'] ?? '';
+  }
 
+  void _populateFields() {
     if (widget.replyToEmail != null) {
       final originalEmail = widget.replyToEmail!;
-      _toController.text = formatRecipientForField({
+      _toController.text = _formatRecipientForDisplay({
         'userId': originalEmail.senderEmail,
         'displayName': originalEmail.senderName,
       });
@@ -73,7 +72,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       );
       if (originalEmail.cc != null && originalEmail.cc!.isNotEmpty) {
         _ccController.text = originalEmail.cc!
-            .map((r) => formatRecipientForField(r))
+            .map((r) => _formatRecipientForDisplay(r))
             .where((s) => s.isNotEmpty)
             .join(', ');
         _showCcBccFields = true;
@@ -85,7 +84,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
               ? originalEmail.subject
               : 'Fw: ${originalEmail.subject}';
       _bodyController.text =
-          '\n\n\n--- Forwarded message ---\nFrom: ${originalEmail.senderName} <${originalEmail.senderEmail}>\nDate: ${_formatDateTimeForQuote(originalEmail.time)}\nSubject: ${originalEmail.subject}\nTo: ${originalEmail.to.map((r) => formatRecipientForField(r)).join(', ')}\n${originalEmail.cc != null && originalEmail.cc!.isNotEmpty ? 'Cc: ${originalEmail.cc!.map((r) => formatRecipientForField(r)).join(', ')}\n' : ''}\n${originalEmail.body}';
+          '\n\n\n--- Forwarded message ---\nFrom: ${originalEmail.senderName} <${originalEmail.senderEmail}>\nDate: ${_formatDateTimeForQuote(originalEmail.time)}\nSubject: ${originalEmail.subject}\nTo: ${originalEmail.to.map((r) => _formatRecipientForDisplay(r)).join(', ')}\n${originalEmail.cc != null && originalEmail.cc!.isNotEmpty ? 'Cc: ${originalEmail.cc!.map((r) => _formatRecipientForDisplay(r)).join(', ')}\n' : ''}\n${originalEmail.body}';
       if (originalEmail.attachments != null &&
           originalEmail.attachments!.isNotEmpty) {
         _initialAttachmentsFromDraft = List<Map<String, String>>.from(
@@ -95,18 +94,18 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
     } else if (widget.draftToEdit != null) {
       final draft = widget.draftToEdit!;
       _toController.text = draft.to
-          .map((r) => formatRecipientForField(r))
+          .map((r) => _formatRecipientForDisplay(r))
           .where((s) => s.isNotEmpty)
           .join(', ');
       _ccController.text =
           draft.cc
-              ?.map((r) => formatRecipientForField(r))
+              ?.map((r) => _formatRecipientForDisplay(r))
               .where((s) => s.isNotEmpty)
               .join(', ') ??
           '';
       _bccController.text =
           draft.bcc
-              ?.map((r) => formatRecipientForField(r))
+              ?.map((r) => _formatRecipientForDisplay(r))
               .where((s) => s.isNotEmpty)
               .join(', ') ??
           '';
@@ -205,7 +204,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
   Future<void> _sendEmail(User currentUser) async {
     if (!_formKey.currentState!.validate()) return;
     if (!mounted) return;
-    setState(() => _isSending = true);
+    setState(() => _isProcessing = true);
 
     final firestoreService = Provider.of<FirestoreService>(
       context,
@@ -235,7 +234,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
           _ccController.text.isNotEmpty ||
           _bccController.text.isNotEmpty) {
         if (mounted) {
-          setState(() => _isSending = false);
+          setState(() => _isProcessing = false);
         }
         return;
       }
@@ -243,11 +242,11 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Please enter at least one recipient (To, CC, or BCC).',
+              'Please enter at least one valid recipient (To, CC, or BCC).',
             ),
           ),
         );
-        setState(() => _isSending = false);
+        setState(() => _isProcessing = false);
       }
       return;
     }
@@ -296,26 +295,61 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       }
       print("Error sending email: $e");
     } finally {
-      if (mounted) setState(() => _isSending = false);
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
-  Future<void> _saveDraft(User currentUser) async {
+  Future<void> _handleSaveDraftAndExit(User currentUser) async {
     if (!mounted) return;
-    if (_toController.text.isEmpty &&
-        _ccController.text.isEmpty &&
-        _bccController.text.isEmpty &&
-        _subjectController.text.isEmpty &&
-        _bodyController.text.isEmpty &&
-        _attachments.isEmpty &&
-        _initialAttachmentsFromDraft.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nothing to save as draft.')),
+
+    bool hasContentToSave =
+        _toController.text.isNotEmpty ||
+        _ccController.text.isNotEmpty ||
+        _bccController.text.isNotEmpty ||
+        _subjectController.text.isNotEmpty ||
+        _bodyController.text.isNotEmpty ||
+        _attachments.isNotEmpty ||
+        _initialAttachmentsFromDraft.isNotEmpty;
+
+    bool hasActualChangesFromDraft = true;
+    if (widget.draftToEdit != null) {
+      hasActualChangesFromDraft =
+          !(_toController.text ==
+                  (widget.draftToEdit!.to
+                      .map(_formatRecipientForDisplay)
+                      .join(', ')) &&
+              _ccController.text ==
+                  (widget.draftToEdit!.cc
+                          ?.map(_formatRecipientForDisplay)
+                          .join(', ') ??
+                      '') &&
+              _bccController.text ==
+                  (widget.draftToEdit!.bcc
+                          ?.map(_formatRecipientForDisplay)
+                          .join(', ') ??
+                      '') &&
+              _subjectController.text == widget.draftToEdit!.subject &&
+              _bodyController.text == widget.draftToEdit!.body &&
+              _attachments.isEmpty &&
+              _initialAttachmentsFromDraft.length ==
+                  (widget.draftToEdit!.attachments?.length ?? 0));
+    }
+
+    if (!hasContentToSave && _editingDraftId.isEmpty) {
+      print(
+        "ComposeEmailScreen: Nothing to save (new email is empty). Closing.",
       );
+      if (mounted) Navigator.pop(context, false);
       return;
     }
 
-    setState(() => _isSavingDraft = true);
+    if (!hasActualChangesFromDraft && _editingDraftId.isNotEmpty) {
+      print("ComposeEmailScreen: No actual changes from draft. Closing.");
+      if (mounted) Navigator.pop(context, false);
+      return;
+    }
+
+    if (mounted) setState(() => _isProcessing = true);
     final firestoreService = Provider.of<FirestoreService>(
       context,
       listen: false,
@@ -372,23 +406,23 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
           attachments: allAttachmentsForDraft,
         );
       } else {
-        _editingDraftId = await firestoreService.saveDraft(
-          userId: senderId,
-          senderDisplayName: senderDisplayName,
-          to: toRecipientsDraft,
-          cc: ccRecipientsDraft,
-          bcc: bccRecipientsDraft,
-          subject: _subjectController.text,
-          body: _bodyController.text,
-          attachments: allAttachmentsForDraft,
-        );
+        if (hasContentToSave) {
+          _editingDraftId = await firestoreService.saveDraft(
+            userId: senderId,
+            senderDisplayName: senderDisplayName,
+            to: toRecipientsDraft,
+            cc: ccRecipientsDraft,
+            bcc: bccRecipientsDraft,
+            subject: _subjectController.text,
+            body: _bodyController.text,
+            attachments: allAttachmentsForDraft,
+          );
+        }
       }
-
-      if (mounted) {
+      if (mounted && hasContentToSave && hasActualChangesFromDraft) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Saved to drafts')));
-        Navigator.pop(context, false);
       }
     } catch (e) {
       if (mounted) {
@@ -398,7 +432,10 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       }
       print("Error saving draft: $e");
     } finally {
-      if (mounted) setState(() => _isSavingDraft = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        Navigator.pop(context, true);
+      }
     }
   }
 
@@ -497,50 +534,11 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          tooltip: 'Cancel',
-          onPressed: () async {
-            bool hasUnsavedChanges =
-                _toController.text.isNotEmpty ||
-                _ccController.text.isNotEmpty ||
-                _bccController.text.isNotEmpty ||
-                _subjectController.text.isNotEmpty ||
-                _bodyController.text.isNotEmpty ||
-                _attachments.isNotEmpty ||
-                (_editingDraftId.isNotEmpty &&
-                    _initialAttachmentsFromDraft.length !=
-                        (widget.draftToEdit?.attachments?.length ?? 0));
-
-            if (hasUnsavedChanges) {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder:
-                    (context) => AlertDialog(
-                      title: const Text('Confirm'),
-                      content: const Text(
-                        'Discard this email? Changes will not be saved.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Keep Editing'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: Text(
-                            'Discard',
-                            style: TextStyle(color: AppColors.error),
-                          ),
-                        ),
-                      ],
-                    ),
-              );
-              if (confirmed != true) return;
-            }
-            Navigator.pop(context, false);
-          },
+          tooltip: 'Save Draft & Close',
+          onPressed: () => _handleSaveDraftAndExit(currentUser),
         ),
         actions: [
-          if (_isSavingDraft || _isSending)
+          if (_isProcessing)
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: SizedBox(
@@ -560,8 +558,8 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
             ),
             IconButton(
               icon: Icon(Icons.drafts_outlined, color: AppColors.primary),
-              tooltip: 'Save draft',
-              onPressed: () => _saveDraft(currentUser),
+              tooltip: 'Save draft & Close',
+              onPressed: () => _handleSaveDraftAndExit(currentUser),
             ),
             IconButton(
               icon: Icon(Icons.send_outlined, color: AppColors.primary),
