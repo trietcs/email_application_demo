@@ -4,17 +4,20 @@ import 'package:email_application/models/email_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:intl/intl.dart';
+import 'package:email_application/config/app_colors.dart';
 
 class EmailListItem extends StatefulWidget {
   final EmailData email;
   final VoidCallback? onTap;
   final VoidCallback? onReadStatusChanged;
+  final VoidCallback? onDeleteOrMove;
 
   const EmailListItem({
     super.key,
     required this.email,
     this.onTap,
     this.onReadStatusChanged,
+    this.onDeleteOrMove,
   });
 
   @override
@@ -22,12 +25,90 @@ class EmailListItem extends StatefulWidget {
 }
 
 class _EmailListItemState extends State<EmailListItem> {
-  late EmailData email;
+  late EmailData _currentEmail;
+  String? _fetchedSenderDisplayName;
+  String? _senderPhotoUrl;
+  bool _isLoadingSenderInfo = true;
 
   @override
   void initState() {
     super.initState();
-    email = widget.email;
+    _currentEmail = widget.email;
+    _fetchSenderProfileInfo();
+  }
+
+  @override
+  void didUpdateWidget(covariant EmailListItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    bool emailChanged = widget.email.id != oldWidget.email.id;
+    if (emailChanged || widget.email.isRead != _currentEmail.isRead) {
+      setState(() {
+        _currentEmail = widget.email;
+      });
+    }
+    if (emailChanged ||
+        widget.email.senderEmail != oldWidget.email.senderEmail) {
+      _fetchSenderProfileInfo();
+    }
+  }
+
+  Future<void> _fetchSenderProfileInfo() async {
+    if (!mounted) return;
+    setState(() => _isLoadingSenderInfo = true);
+
+    final String senderId = widget.email.senderEmail;
+    print(
+      "EmailListItem (${widget.email.id}): Fetching sender profile for senderId: '$senderId'",
+    );
+
+    if (senderId.isEmpty) {
+      print(
+        "EmailListItem (${widget.email.id}): senderId is empty, using senderName from EmailData as fallback.",
+      );
+      setState(() {
+        _fetchedSenderDisplayName =
+            widget.email.senderName.isNotEmpty
+                ? widget.email.senderName
+                : 'Unknown';
+        _senderPhotoUrl = null;
+        _isLoadingSenderInfo = false;
+      });
+      return;
+    }
+
+    try {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
+      final userProfile = await firestoreService.getUserProfile(senderId);
+      print(
+        "EmailListItem (${widget.email.id}): Profile fetched for $senderId: $userProfile",
+      );
+
+      if (mounted) {
+        setState(() {
+          _fetchedSenderDisplayName =
+              userProfile?['displayName'] ?? widget.email.senderName;
+          _senderPhotoUrl = userProfile?['photoURL'] as String?;
+          _isLoadingSenderInfo = false;
+          print(
+            "EmailListItem (${widget.email.id}): Updated state - DisplayName: $_fetchedSenderDisplayName, PhotoURL: $_senderPhotoUrl",
+          );
+        });
+      }
+    } catch (e) {
+      print(
+        "EmailListItem (${widget.email.id}): Error fetching sender profile for senderId '$senderId': $e",
+      );
+      if (mounted) {
+        setState(() {
+          _fetchedSenderDisplayName = widget.email.senderName;
+          _senderPhotoUrl = null;
+          _isLoadingSenderInfo = false;
+        });
+      }
+    }
   }
 
   String _formatDateTime(String dateTimeString) {
@@ -37,31 +118,26 @@ class _EmailListItemState extends State<EmailListItem> {
       final today = DateTime(now.year, now.month, now.day);
       final yesterday = today.subtract(const Duration(days: 1));
 
-      final isToday =
-          dateTime.year == today.year &&
+      if (dateTime.year == today.year &&
           dateTime.month == today.month &&
-          dateTime.day == today.day;
-
-      final isYesterday =
-          dateTime.year == yesterday.year &&
+          dateTime.day == today.day) {
+        return DateFormat.Hm('en_US').format(dateTime);
+      } else if (dateTime.year == yesterday.year &&
           dateTime.month == yesterday.month &&
-          dateTime.day == yesterday.day;
-
-      if (isToday) {
-        return DateFormat.Hm('en_US').format(dateTime); // e.g., 14:30
-      } else if (isYesterday) {
+          dateTime.day == yesterday.day) {
         return 'Yesterday';
       } else if (dateTime.year == now.year) {
-        return DateFormat('MMM d', 'en_US').format(dateTime); // e.g., May 23
+        return DateFormat('MMM d', 'en_US').format(dateTime);
       } else {
-        return DateFormat(
-          'MM/dd/yy',
-          'en_US',
-        ).format(dateTime); // e.g., 12/01/24
+        return DateFormat('MM/dd/yy', 'en_US').format(dateTime);
       }
     } catch (e) {
       print("Error formatting time: $e for time string: $dateTimeString");
-      return dateTimeString.split(' ').first;
+      try {
+        return dateTimeString.split('T')[0];
+      } catch (_) {
+        return dateTimeString;
+      }
     }
   }
 
@@ -75,37 +151,36 @@ class _EmailListItemState extends State<EmailListItem> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (userId == null) {
-      if (mounted) {
+      if (mounted)
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Please sign in to continue')),
         );
-      }
       return;
     }
 
     try {
+      bool newReadStatus = !_currentEmail.isRead;
       await firestoreService.markEmailAsRead(
         userId: userId,
-        emailId: email.id,
-        isRead: !email.isRead,
+        emailId: _currentEmail.id,
+        isRead: newReadStatus,
       );
       if (mounted) {
-        setState(() {
-          email.isRead = !email.isRead;
-        });
+        setState(() => _currentEmail.isRead = newReadStatus);
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(email.isRead ? 'Mark as unread' : 'Mark as read'),
+            content: Text(
+              _currentEmail.isRead ? 'Marked as read' : 'Marked as unread',
+            ),
           ),
         );
       }
       widget.onReadStatusChanged?.call();
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Error changing status: ${e.toString()}')),
         );
-      }
     }
   }
 
@@ -119,11 +194,10 @@ class _EmailListItemState extends State<EmailListItem> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (userId == null) {
-      if (mounted) {
+      if (mounted)
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Please sign in to continue')),
         );
-      }
       return;
     }
 
@@ -138,15 +212,11 @@ class _EmailListItemState extends State<EmailListItem> {
           actions: <Widget>[
             TextButton(
               child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
             TextButton(
-              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
+              child: Text('Delete', style: TextStyle(color: AppColors.error)),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],
         );
@@ -158,36 +228,48 @@ class _EmailListItemState extends State<EmailListItem> {
     try {
       await firestoreService.deleteEmail(
         userId: userId,
-        emailId: email.id,
+        emailId: _currentEmail.id,
         targetFolder: 'trash',
       );
-      if (mounted) {
+      if (mounted)
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Moved to Trash')),
         );
-      }
-      widget.onReadStatusChanged?.call();
+      widget.onDeleteOrMove?.call();
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Error deleting email: ${e.toString()}')),
         );
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isUnread = !email.isRead;
-    final Color primaryTextColor = isUnread ? Colors.black87 : Colors.black54;
-    final FontWeight fontWeight =
+    final bool isUnread = !_currentEmail.isRead;
+    final Color itemTextColor = isUnread ? Colors.black87 : Colors.black54;
+    final FontWeight itemFontWeight =
         isUnread ? FontWeight.bold : FontWeight.normal;
+
+    String displayNameToShow =
+        _isLoadingSenderInfo
+            ? "..."
+            : (_fetchedSenderDisplayName ?? widget.email.senderName);
+
+    String initialLetter = "?";
+    if (displayNameToShow.isNotEmpty && displayNameToShow != "...") {
+      initialLetter = displayNameToShow[0].toUpperCase();
+    }
 
     return InkWell(
       onTap: widget.onTap,
       onLongPress: () {
         showModalBottomSheet(
           context: context,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
           builder:
               (context) => SafeArea(
                 child: Column(
@@ -195,11 +277,18 @@ class _EmailListItemState extends State<EmailListItem> {
                   children: [
                     ListTile(
                       leading: Icon(
-                        email.isRead ? Icons.mail_outline : Icons.mail,
-                        color: email.isRead ? Colors.blue : Colors.grey,
+                        _currentEmail.isRead
+                            ? Icons.drafts_outlined
+                            : Icons.mark_email_read_outlined,
+                        color:
+                            _currentEmail.isRead
+                                ? AppColors.primary
+                                : AppColors.secondaryIcon,
                       ),
                       title: Text(
-                        email.isRead ? 'Mark as unread' : 'Mark as read',
+                        _currentEmail.isRead
+                            ? 'Mark as unread'
+                            : 'Mark as read',
                       ),
                       onTap: () async {
                         Navigator.pop(context);
@@ -207,7 +296,10 @@ class _EmailListItemState extends State<EmailListItem> {
                       },
                     ),
                     ListTile(
-                      leading: const Icon(Icons.delete, color: Colors.red),
+                      leading: Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppColors.error,
+                      ),
                       title: const Text('Delete'),
                       onTap: () async {
                         Navigator.pop(context);
@@ -224,32 +316,39 @@ class _EmailListItemState extends State<EmailListItem> {
         decoration: BoxDecoration(
           color:
               isUnread
-                  ? Theme.of(context).primaryColor.withOpacity(0.05)
+                  ? AppColors.primary.withOpacity(0.05)
                   : Colors.transparent,
           border: Border(
-            bottom: BorderSide(color: Colors.grey[200]!, width: 0.5),
+            bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
+              key: ValueKey<String?>(_senderPhotoUrl ?? displayNameToShow),
               backgroundColor:
                   isUnread
-                      ? Theme.of(context).primaryColor.withOpacity(0.2)
+                      ? AppColors.primary.withOpacity(0.15)
                       : Colors.blueGrey[100],
-              child: Text(
-                email.senderName.isNotEmpty
-                    ? email.senderName[0].toUpperCase()
-                    : '?',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color:
-                      isUnread
-                          ? Theme.of(context).primaryColor
-                          : Colors.blueGrey[700],
-                ),
-              ),
+              backgroundImage:
+                  (_senderPhotoUrl != null && _senderPhotoUrl!.isNotEmpty)
+                      ? NetworkImage(_senderPhotoUrl!)
+                      : null,
+              child:
+                  (_senderPhotoUrl == null || _senderPhotoUrl!.isEmpty)
+                      ? Text(
+                        initialLetter,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color:
+                              isUnread
+                                  ? AppColors.primary
+                                  : AppColors.secondaryText,
+                        ),
+                      )
+                      : null,
             ),
             const SizedBox(width: 12.0),
             Expanded(
@@ -257,30 +356,32 @@ class _EmailListItemState extends State<EmailListItem> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    email.senderName,
+                    displayNameToShow,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontWeight: fontWeight,
+                      fontWeight: itemFontWeight,
                       fontSize: 16,
-                      color: primaryTextColor,
+                      color: itemTextColor,
                     ),
                   ),
                   const SizedBox(height: 2.0),
                   Text(
-                    email.subject.isNotEmpty ? email.subject : '(No Subject)',
+                    _currentEmail.subject.isNotEmpty
+                        ? _currentEmail.subject
+                        : '(No Subject)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontWeight: fontWeight,
+                      fontWeight: itemFontWeight,
                       fontSize: 14,
-                      color: primaryTextColor,
+                      color: itemTextColor,
                     ),
                   ),
                   const SizedBox(height: 2.0),
                   Text(
-                    email.previewText.isNotEmpty
-                        ? email.previewText
+                    _currentEmail.previewText.isNotEmpty
+                        ? _currentEmail.previewText.replaceAll('\n', ' ')
                         : '(No preview content)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -295,13 +396,10 @@ class _EmailListItemState extends State<EmailListItem> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _formatDateTime(email.time),
+                  _formatDateTime(_currentEmail.time),
                   style: TextStyle(
                     fontSize: 12,
-                    color:
-                        isUnread
-                            ? Theme.of(context).primaryColor
-                            : Colors.grey[700],
+                    color: isUnread ? AppColors.primary : Colors.grey[700],
                     fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -311,7 +409,7 @@ class _EmailListItemState extends State<EmailListItem> {
                     height: 8,
                     width: 8,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor,
+                      color: AppColors.primary,
                       shape: BoxShape.circle,
                     ),
                   ),
