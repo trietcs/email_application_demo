@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:email_application/screens/models/email_data.dart';
+import 'package:email_application/models/email_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/compose/compose_email_screen.dart';
