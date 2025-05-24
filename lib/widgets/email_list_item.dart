@@ -11,6 +11,7 @@ class EmailListItem extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onReadStatusChanged;
   final VoidCallback? onDeleteOrMove;
+  final bool isSentItem;
 
   const EmailListItem({
     super.key,
@@ -18,6 +19,7 @@ class EmailListItem extends StatefulWidget {
     this.onTap,
     this.onReadStatusChanged,
     this.onDeleteOrMove,
+    this.isSentItem = false,
   });
 
   @override
@@ -26,15 +28,15 @@ class EmailListItem extends StatefulWidget {
 
 class _EmailListItemState extends State<EmailListItem> {
   late EmailData _currentEmail;
-  String? _fetchedSenderDisplayName;
-  String? _senderPhotoUrl;
-  bool _isLoadingSenderInfo = true;
+  String? _fetchedDisplayName;
+  String? _photoUrl;
+  bool _isLoadingProfileInfo = true;
 
   @override
   void initState() {
     super.initState();
     _currentEmail = widget.email;
-    _fetchSenderProfileInfo();
+    _fetchRelevantProfileInfo();
   }
 
   @override
@@ -47,31 +49,33 @@ class _EmailListItemState extends State<EmailListItem> {
       });
     }
     if (emailChanged ||
-        widget.email.senderEmail != oldWidget.email.senderEmail) {
-      _fetchSenderProfileInfo();
+        widget.email.senderEmail != oldWidget.email.senderEmail ||
+        widget.isSentItem != oldWidget.isSentItem) {
+      _fetchRelevantProfileInfo();
     }
   }
 
-  Future<void> _fetchSenderProfileInfo() async {
+  Future<void> _fetchRelevantProfileInfo() async {
     if (!mounted) return;
-    setState(() => _isLoadingSenderInfo = true);
+    setState(() => _isLoadingProfileInfo = true);
 
-    final String senderId = widget.email.senderEmail;
+    final String contactIdToLookup = widget.email.senderEmail;
+
     print(
-      "EmailListItem (${widget.email.id}): Fetching sender profile for senderId: '$senderId'",
+      "EmailListItem (${widget.email.id}, isSent: ${widget.isSentItem}): Fetching profile for contactId: '$contactIdToLookup'",
     );
 
-    if (senderId.isEmpty) {
+    if (contactIdToLookup.isEmpty) {
       print(
-        "EmailListItem (${widget.email.id}): senderId is empty, using senderName from EmailData as fallback.",
+        "EmailListItem (${widget.email.id}): contactIdToLookup is empty. Using name from EmailData: '${widget.email.senderName}'",
       );
       setState(() {
-        _fetchedSenderDisplayName =
+        _fetchedDisplayName =
             widget.email.senderName.isNotEmpty
                 ? widget.email.senderName
                 : 'Unknown';
-        _senderPhotoUrl = null;
-        _isLoadingSenderInfo = false;
+        _photoUrl = null;
+        _isLoadingProfileInfo = false;
       });
       return;
     }
@@ -81,31 +85,36 @@ class _EmailListItemState extends State<EmailListItem> {
         context,
         listen: false,
       );
-      final userProfile = await firestoreService.getUserProfile(senderId);
+      final userProfile = await firestoreService.getUserProfile(
+        contactIdToLookup,
+      );
       print(
-        "EmailListItem (${widget.email.id}): Profile fetched for $senderId: $userProfile",
+        "EmailListItem (${widget.email.id}): Profile fetched for $contactIdToLookup: $userProfile",
       );
 
       if (mounted) {
         setState(() {
-          _fetchedSenderDisplayName =
-              userProfile?['displayName'] ?? widget.email.senderName;
-          _senderPhotoUrl = userProfile?['photoURL'] as String?;
-          _isLoadingSenderInfo = false;
+          _fetchedDisplayName =
+              userProfile?['displayName'] ??
+              (widget.isSentItem
+                  ? widget.email.senderName.replaceFirst('To: ', '')
+                  : widget.email.senderName);
+          _photoUrl = userProfile?['photoURL'] as String?;
+          _isLoadingProfileInfo = false;
           print(
-            "EmailListItem (${widget.email.id}): Updated state - DisplayName: $_fetchedSenderDisplayName, PhotoURL: $_senderPhotoUrl",
+            "EmailListItem (${widget.email.id}): Updated state - DisplayName: $_fetchedDisplayName, PhotoURL: $_photoUrl",
           );
         });
       }
     } catch (e) {
       print(
-        "EmailListItem (${widget.email.id}): Error fetching sender profile for senderId '$senderId': $e",
+        "EmailListItem (${widget.email.id}): Error fetching profile for contactId '$contactIdToLookup': $e",
       );
       if (mounted) {
         setState(() {
-          _fetchedSenderDisplayName = widget.email.senderName;
-          _senderPhotoUrl = null;
-          _isLoadingSenderInfo = false;
+          _fetchedDisplayName = widget.email.senderName;
+          _photoUrl = null;
+          _isLoadingProfileInfo = false;
         });
       }
     }
@@ -251,14 +260,27 @@ class _EmailListItemState extends State<EmailListItem> {
     final FontWeight itemFontWeight =
         isUnread ? FontWeight.bold : FontWeight.normal;
 
-    String displayNameToShow =
-        _isLoadingSenderInfo
+    String nameToDisplay =
+        _isLoadingProfileInfo
             ? "..."
-            : (_fetchedSenderDisplayName ?? widget.email.senderName);
+            : (_fetchedDisplayName ?? widget.email.senderName);
+
+    if (widget.isSentItem &&
+        nameToDisplay.isNotEmpty &&
+        nameToDisplay != "..." &&
+        !nameToDisplay.toLowerCase().startsWith('to: ')) {
+      nameToDisplay = 'To: $nameToDisplay';
+    }
 
     String initialLetter = "?";
-    if (displayNameToShow.isNotEmpty && displayNameToShow != "...") {
-      initialLetter = displayNameToShow[0].toUpperCase();
+    if (nameToDisplay.isNotEmpty && nameToDisplay != "...") {
+      String namePartForInitial =
+          widget.isSentItem
+              ? nameToDisplay.replaceFirst('To: ', '')
+              : nameToDisplay;
+      if (namePartForInitial.isNotEmpty) {
+        initialLetter = namePartForInitial[0].toUpperCase();
+      }
     }
 
     return InkWell(
@@ -326,17 +348,17 @@ class _EmailListItemState extends State<EmailListItem> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
-              key: ValueKey<String?>(_senderPhotoUrl ?? displayNameToShow),
+              key: ValueKey<String?>(_photoUrl ?? nameToDisplay),
               backgroundColor:
                   isUnread
                       ? AppColors.primary.withOpacity(0.15)
                       : Colors.blueGrey[100],
               backgroundImage:
-                  (_senderPhotoUrl != null && _senderPhotoUrl!.isNotEmpty)
-                      ? NetworkImage(_senderPhotoUrl!)
+                  (_photoUrl != null && _photoUrl!.isNotEmpty)
+                      ? NetworkImage(_photoUrl!)
                       : null,
               child:
-                  (_senderPhotoUrl == null || _senderPhotoUrl!.isEmpty)
+                  (_photoUrl == null || _photoUrl!.isEmpty)
                       ? Text(
                         initialLetter,
                         style: TextStyle(
@@ -356,7 +378,7 @@ class _EmailListItemState extends State<EmailListItem> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    displayNameToShow,
+                    nameToDisplay,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

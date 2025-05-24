@@ -7,6 +7,7 @@ import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/emails/view_email_screen.dart';
 import 'package:email_application/widgets/email_list_item.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:email_application/config/app_colors.dart';
 
 class SentScreen extends StatefulWidget {
   const SentScreen({super.key});
@@ -82,40 +83,86 @@ class _SentScreenState extends State<SentScreen> {
       String previewText =
           body.length > 50 ? '${body.substring(0, 50)}...' : body;
 
-      String recipientDisplayName = '';
+      String primaryRecipientDisplayName = 'Unknown Recipient';
+      String primaryRecipientUserIdForAvatarLookup = '';
+
       final toList = emailMap['to'] as List<dynamic>?;
       if (toList != null && toList.isNotEmpty) {
         final firstTo = toList[0] as Map<String, dynamic>?;
-        recipientDisplayName = firstTo?['displayName'] as String? ?? '';
+        if (firstTo != null) {
+          primaryRecipientDisplayName =
+              firstTo['displayName'] as String? ??
+              (firstTo['userId'] as String? ?? 'Unknown Recipient');
+          primaryRecipientUserIdForAvatarLookup =
+              firstTo['userId'] as String? ?? '';
+        }
       }
 
-      if (recipientDisplayName.isEmpty) {
-        recipientDisplayName =
-            emailMap['subject'] as String? ?? '(Thư đã gửi không có chủ đề)';
+      if (primaryRecipientDisplayName == 'Unknown Recipient' ||
+          primaryRecipientDisplayName.isEmpty) {
+        final ccList = emailMap['cc'] as List<dynamic>?;
+        if (ccList != null && ccList.isNotEmpty) {
+          final firstCc = ccList[0] as Map<String, dynamic>?;
+          if (firstCc != null) {
+            primaryRecipientDisplayName =
+                firstCc['displayName'] as String? ??
+                (firstCc['userId'] as String? ?? 'Unknown Recipient');
+            primaryRecipientUserIdForAvatarLookup =
+                firstCc['userId'] as String? ?? '';
+          }
+        } else {
+          final bccList = emailMap['bcc'] as List<dynamic>?;
+          if (bccList != null && bccList.isNotEmpty) {
+            final firstBcc = bccList[0] as Map<String, dynamic>?;
+            if (firstBcc != null) {
+              primaryRecipientDisplayName =
+                  firstBcc['displayName'] as String? ??
+                  (firstBcc['userId'] as String? ?? 'Unknown Recipient');
+              primaryRecipientUserIdForAvatarLookup =
+                  firstBcc['userId'] as String? ?? '';
+            }
+          }
+        }
       }
-      if (recipientDisplayName.isEmpty) {
-        recipientDisplayName = '(Thư đã gửi)';
+
+      if (primaryRecipientDisplayName.isEmpty) {
+        primaryRecipientDisplayName =
+            emailMap['subject'] as String? ?? '(No Subject)';
+      }
+      if (primaryRecipientDisplayName.isEmpty) {
+        primaryRecipientDisplayName = '(No Recipient or Subject)';
       }
 
       return EmailData(
         id: emailMap['id'] as String? ?? '',
-        senderName: 'Đến: $recipientDisplayName',
-        subject: emailMap['subject'] as String? ?? '(Không có chủ đề)',
+        senderName: primaryRecipientDisplayName,
+        senderEmail: primaryRecipientUserIdForAvatarLookup,
+        subject: emailMap['subject'] as String? ?? '(No Subject)',
         previewText: previewText,
         body: body,
         time: timeString,
-        isRead: emailMap['isRead'] as bool? ?? true,
+        isRead: true,
         to:
             (emailMap['to'] as List<dynamic>?)
-                ?.map((e) => e as Map<String, dynamic>)
-                .map(
-                  (recipientMap) => {
-                    'userId': recipientMap['userId'] as String? ?? '',
-                    'displayName': recipientMap['displayName'] as String? ?? '',
-                  },
-                )
+                ?.map((e) => Map<String, String>.from(e as Map? ?? {}))
                 .toList() ??
             [],
+        cc:
+            (emailMap['cc'] as List<dynamic>?)
+                ?.map((e) => Map<String, String>.from(e as Map? ?? {}))
+                .toList() ??
+            [],
+        bcc:
+            (emailMap['bcc'] as List<dynamic>?)
+                ?.map((e) => Map<String, String>.from(e as Map? ?? {}))
+                .toList() ??
+            [],
+        attachments:
+            (emailMap['attachments'] as List<dynamic>?)
+                ?.map((e) => Map<String, String>.from(e as Map? ?? {}))
+                .toList() ??
+            [],
+        folder: emailMap['folder'] as String? ?? folder,
       );
     }).toList();
   }
@@ -137,60 +184,97 @@ class _SentScreenState extends State<SentScreen> {
   Widget build(BuildContext context) {
     if (_currentUser == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Thư đã gửi')),
-        body: const Center(child: Text('Vui lòng đăng nhập.')),
+        body: const Center(
+          child: Text('Please log in to view your sent emails.'),
+        ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Thư đã gửi')),
       body: RefreshIndicator(
         onRefresh: () async => _loadEmails(),
+        color: AppColors.primary,
         child: FutureBuilder<List<EmailData>>(
           future: _emailsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
               return Center(
-                child: Text('Lỗi khi tải thư đã gửi: ${snapshot.error}'),
+                child: CircularProgressIndicator(color: AppColors.primary),
               );
             }
+
+            if (snapshot.hasError) {
+              print('SentScreen FutureBuilder Error: ${snapshot.error}');
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: AppColors.error,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error loading sent emails: ${snapshot.error}',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Pull down to try again.',
+                          style: TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+
             final emails = snapshot.data ?? [];
             if (emails.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.outbox_outlined,
-                      size: 60,
-                      color: Colors.grey,
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.outbox_outlined,
+                          size: 60,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No emails in Sent folder!',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Không có thư nào trong mục Đã gửi!',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Tải lại'),
-                      onPressed: _loadEmails,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               );
             }
+
             return ListView.builder(
               itemCount: emails.length,
               itemBuilder: (context, index) {
                 final email = emails[index];
                 return EmailListItem(
                   email: email,
+                  isSentItem: true,
                   onTap: () => _handleEmailTap(email),
-                  onReadStatusChanged: _loadEmails,
+                  onReadStatusChanged: null,
+                  onDeleteOrMove: _loadEmails,
                 );
               },
             );
