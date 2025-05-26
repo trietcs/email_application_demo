@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:email_application/config/app_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:mime/mime.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
@@ -158,6 +159,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
           'name': file.name,
           'url': downloadUrl,
           'size': file.size.toString(),
+          'mimeType': lookupMimeType(file.name) ?? 'application/octet-stream',
         });
       } catch (e) {
         print("Error uploading attachment ${file.name}: $e");

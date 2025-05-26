@@ -9,6 +9,7 @@ import 'package:email_application/config/app_colors.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:collection';
+import 'package:email_application/screens/attachments/attachment_viewer_screen.dart';
 
 class ViewEmailScreen extends StatefulWidget {
   final EmailData emailData;
@@ -43,6 +44,32 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     _currentUserId = authService.currentUser?.uid;
     _markEmailAsReadOnOpen();
     _fetchSenderProfile();
+  }
+
+  void _viewAttachment(Map<String, String> attachment) {
+    if (!mounted) return;
+    final String? url = attachment['url'];
+    final String name = attachment['name'] ?? 'Attachment';
+    final String? mimeType = attachment['mimeType'];
+
+    if (url == null || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Attachment URL is missing.')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => AttachmentViewerScreen(
+              attachmentUrl: url,
+              attachmentName: name,
+              attachmentMimeType: mimeType,
+            ),
+      ),
+    );
   }
 
   Future<void> _fetchSenderProfile() async {
@@ -756,7 +783,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                     _buildDetailedRecipientInfo('To', _currentEmailData.to),
                     if (_currentEmailData.cc?.isNotEmpty ?? false)
                       _buildDetailedRecipientInfo('Cc', _currentEmailData.cc!),
-                    _buildBccEntry(), // Updated Bcc Entry
+                    _buildBccEntry(),
                     Padding(
                       padding: _detailItemPadding,
                       child: Row(
@@ -820,14 +847,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                           color: AppColors.secondaryIcon,
                         ),
                         label: Text(attachment['name'] ?? 'file'),
-                        onPressed:
-                            () => ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Downloading ${attachment['name'] ?? 'file'}... (Not implemented)',
-                                ),
-                              ),
-                            ),
+                        onPressed: () => _viewAttachment(attachment),
                         backgroundColor: Colors.grey[200],
                         labelStyle: TextStyle(color: AppColors.secondaryText),
                       );
