@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:email_application/models/email_folder.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class FirestoreService {
@@ -85,8 +86,9 @@ class FirestoreService {
       Map<String, dynamic> dataToUpdate = {};
       if (displayName != null) dataToUpdate['displayName'] = displayName;
       if (gender != null) dataToUpdate['gender'] = gender;
-      if (dateOfBirth != null)
+      if (dateOfBirth != null) {
         dataToUpdate['dateOfBirth'] = Timestamp.fromDate(dateOfBirth);
+      }
       if (photoURL != null) dataToUpdate['photoURL'] = photoURL;
 
       if (dataToUpdate.isNotEmpty) {
@@ -152,6 +154,7 @@ class FirestoreService {
                   userData['displayName'] as String? ??
                   userData['customEmail'] as String? ??
                   e164PhoneNumber,
+              'email': userData['customEmail'] as String? ?? '',
             };
           }
         }
@@ -160,6 +163,7 @@ class FirestoreService {
         if (!contactInfo.contains('@')) {
           emailToFind = '$contactInfo@tvamail.com';
         } else if (!contactInfo.endsWith('@tvamail.com')) {
+          print("findUserByContactInfo: Invalid email domain for $contactInfo");
           return null;
         }
       }
@@ -178,6 +182,7 @@ class FirestoreService {
       return {
         'userId': userDoc.id,
         'displayName': userData['displayName'] as String? ?? emailToFind,
+        'email': userData['customEmail'] as String? ?? emailToFind,
       };
     } catch (e) {
       print('Error finding user by contactInfo ($contactInfo): $e');
@@ -187,24 +192,37 @@ class FirestoreService {
 
   Future<List<Map<String, dynamic>>> getEmails(
     String userId,
-    String folder,
+    EmailFolder folder,
   ) async {
     try {
-      final snapshot =
-          await usersCollection
-              .doc(userId)
-              .collection('userEmails')
-              .where('folder', isEqualTo: folder)
-              .get();
-      return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+      Query query = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .where('folder', isEqualTo: folder.folderName);
+
+      if (folder == EmailFolder.trash) {
+        query = query.orderBy('timestamp', descending: true);
+      } else {
+        query = query.orderBy('timestamp', descending: true);
+      }
+
+      final snapshot = await query.get();
+      return snapshot.docs.map<Map<String, dynamic>>((doc) {
+        final data = doc.data();
+        if (data is Map<String, dynamic>) {
+          return {...data, 'id': doc.id};
+        } else {
+          return {'id': doc.id};
+        }
+      }).toList();
     } catch (e) {
-      print('Error getting emails for folder $folder: $e');
+      print('Error getting emails for folder ${folder.folderName}: $e');
       return [];
     }
   }
 
   Future<void> sendEmail({
-    required String senderId,
+    required String senderId, // UID
     required String senderDisplayName,
     required List<Map<String, String>> to,
     List<Map<String, String>>? cc,
@@ -214,15 +232,26 @@ class FirestoreService {
     List<Map<String, String>>? attachments,
   }) async {
     try {
+      final Timestamp now = Timestamp.now();
+
+      final senderProfile = await getUserProfile(senderId);
+      final senderActualEmail =
+          senderProfile?['customEmail'] ?? 'unknown_sender@tvamail.com';
+
       final emailDataForSender = {
-        'from': {'userId': senderId, 'displayName': senderDisplayName},
+        'from': {
+          'userId': senderId,
+          'displayName': senderDisplayName,
+          'email': senderActualEmail,
+        },
         'to': to,
         'cc': cc ?? [],
         'bcc': bcc ?? [],
         'subject': subject,
         'body': body,
-        'timestamp': FieldValue.serverTimestamp(),
-        'folder': 'sent',
+        'timestamp': now,
+        'folder': EmailFolder.sent.folderName,
+        'originalFolder': EmailFolder.sent.folderName,
         'isRead': true,
         'isStarred': false,
         'attachments': attachments ?? [],
@@ -234,25 +263,44 @@ class FirestoreService {
 
       final emailDataForRecipient = {
         ...emailDataForSender,
-        'folder': 'inbox',
+        'folder': EmailFolder.inbox.folderName,
+        'originalFolder': EmailFolder.inbox.folderName,
         'isRead': false,
       };
+      final emailDataForToCcRecipients = Map<String, dynamic>.from(
+        emailDataForRecipient,
+      )..remove('bcc');
+
+      Future<void> addEmailToRecipient(
+        String recipientUserId,
+        bool isBccRecipient,
+      ) async {
+        await usersCollection
+            .doc(recipientUserId)
+            .collection('userEmails')
+            .add(
+              isBccRecipient
+                  ? emailDataForRecipient
+                  : emailDataForToCcRecipients,
+            );
+      }
 
       for (var recipient in to) {
         if (recipient['userId'] != null && recipient['userId']!.isNotEmpty) {
-          await usersCollection
-              .doc(recipient['userId']!)
-              .collection('userEmails')
-              .add(emailDataForRecipient);
+          await addEmailToRecipient(recipient['userId']!, false);
         }
       }
       if (cc != null) {
         for (var recipient in cc) {
           if (recipient['userId'] != null && recipient['userId']!.isNotEmpty) {
-            await usersCollection
-                .doc(recipient['userId']!)
-                .collection('userEmails')
-                .add(emailDataForRecipient);
+            await addEmailToRecipient(recipient['userId']!, false);
+          }
+        }
+      }
+      if (bcc != null) {
+        for (var recipient in bcc) {
+          if (recipient['userId'] != null && recipient['userId']!.isNotEmpty) {
+            await addEmailToRecipient(recipient['userId']!, true);
           }
         }
       }
@@ -274,7 +322,7 @@ class FirestoreService {
           .doc(emailId)
           .update({'isRead': isRead});
       print(
-        'FirestoreService: Marked email $emailId as $isRead for user $userId',
+        'FirestoreService: Marked email $emailId as ${isRead ? "read" : "unread"} for user $userId',
       );
     } catch (e) {
       print('Error marking email as read: $e');
@@ -285,7 +333,8 @@ class FirestoreService {
   Future<void> deleteEmail({
     required String userId,
     required String emailId,
-    String? targetFolder,
+    required EmailFolder currentFolder,
+    required EmailFolder targetFolder,
   }) async {
     try {
       final emailRef = usersCollection
@@ -298,26 +347,23 @@ class FirestoreService {
         print("Email $emailId does not exist for user $userId.");
         return;
       }
-      final emailData = emailDoc.data();
 
-      if (targetFolder == 'trash') {
-        if (emailData != null) {
-          await emailRef.update({
-            'folder': 'trash',
-            'timestamp': FieldValue.serverTimestamp(),
-          });
-          print(
-            'FirestoreService: Email $emailId moved to trash for user $userId',
-          );
-        }
-      } else {
-        await emailRef.delete();
+      if (targetFolder == EmailFolder.trash) {
+        await emailRef.update({
+          'folder': EmailFolder.trash.folderName,
+          'originalFolder': currentFolder.folderName,
+        });
         print(
-          'FirestoreService: Email $emailId permanently deleted for user $userId',
+          'FirestoreService: Email $emailId moved to trash for user $userId from ${currentFolder.folderName}. Timestamp preserved.',
+        );
+      } else {
+        await emailRef.update({'folder': targetFolder.folderName});
+        print(
+          'FirestoreService: Email $emailId moved to folder ${targetFolder.folderName} for user $userId. Timestamp preserved.',
         );
       }
     } catch (e) {
-      print('Error deleting email: $e');
+      print('Error deleting/moving email: $e');
       throw e;
     }
   }
@@ -333,15 +379,24 @@ class FirestoreService {
     List<Map<String, String>>? attachments,
   }) async {
     try {
+      final senderProfile = await getUserProfile(userId);
+      final senderActualEmail =
+          senderProfile?['customEmail'] ?? 'unknown_draft_sender@tvamail.com';
+
       final draftData = {
-        'from': {'userId': userId, 'displayName': senderDisplayName},
+        'from': {
+          'userId': userId,
+          'displayName': senderDisplayName,
+          'email': senderActualEmail,
+        },
         'to': to,
         'cc': cc ?? [],
         'bcc': bcc ?? [],
         'subject': subject,
         'body': body,
         'timestamp': FieldValue.serverTimestamp(),
-        'folder': 'drafts',
+        'folder': EmailFolder.drafts.folderName,
+        'originalFolder': EmailFolder.drafts.folderName,
         'isRead': true,
         'isStarred': false,
         'attachments': attachments ?? [],
@@ -372,12 +427,20 @@ class FirestoreService {
     List<Map<String, String>>? attachments,
   }) async {
     try {
+      final senderProfile = await getUserProfile(userId);
+      final senderActualEmail =
+          senderProfile?['customEmail'] ?? 'unknown_draft_sender@tvamail.com';
+
       final draftRef = usersCollection
           .doc(userId)
           .collection('userEmails')
           .doc(draftId);
       await draftRef.update({
-        'from': {'userId': userId, 'displayName': senderDisplayName},
+        'from': {
+          'userId': userId,
+          'displayName': senderDisplayName,
+          'email': senderActualEmail,
+        },
         'to': to,
         'cc': cc ?? [],
         'bcc': bcc ?? [],

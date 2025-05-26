@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
+import 'package:email_application/models/email_folder.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/compose/compose_email_screen.dart';
+import 'package:email_application/config/app_colors.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:collection';
 
 class ViewEmailScreen extends StatefulWidget {
   final EmailData emailData;
@@ -18,17 +22,75 @@ class ViewEmailScreen extends StatefulWidget {
 class _ViewEmailScreenState extends State<ViewEmailScreen> {
   late EmailData _currentEmailData;
   bool _isProcessingAction = false;
+  bool _showDetails = false;
+  String? _currentUserEmail;
+  String? _currentUserId;
+  String? _senderPhotoUrl;
+  bool _isLoadingSenderProfile = true;
+  String? _senderDisplayableEmail;
+
+  final double _labelWidth = 55.0;
+  final EdgeInsets _detailItemPadding = const EdgeInsets.symmetric(
+    vertical: 4.0,
+  );
 
   @override
   void initState() {
     super.initState();
     _currentEmailData = widget.emailData;
+    final authService = Provider.of<AuthService>(context, listen: false);
+    _currentUserEmail = authService.currentUser?.email;
+    _currentUserId = authService.currentUser?.uid;
     _markEmailAsReadOnOpen();
+    _fetchSenderProfile();
+  }
+
+  Future<void> _fetchSenderProfile() async {
+    final String? senderId = _currentEmailData.senderUid;
+
+    if (senderId == null || senderId.isEmpty) {
+      if (mounted) {
+        print(
+          "ViewEmailScreen: Sender UID is empty for email ID: ${widget.emailData.id}. Cannot fetch profile.",
+        );
+        setState(() => _isLoadingSenderProfile = false);
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    try {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
+      final profile = await firestoreService.getUserProfile(senderId);
+      if (mounted) {
+        setState(() {
+          _senderPhotoUrl = profile?['photoURL'] as String?;
+          _senderDisplayableEmail =
+              profile?['customEmail'] as String? ?? senderId;
+          _isLoadingSenderProfile = false;
+        });
+      }
+    } catch (e) {
+      print("Error fetching sender profile for UID $senderId: $e");
+      if (mounted) {
+        setState(() {
+          _senderDisplayableEmail = senderId;
+          _senderPhotoUrl = null;
+          _isLoadingSenderProfile = false;
+        });
+      }
+    }
   }
 
   Future<void> _markEmailAsReadOnOpen() async {
     if (!mounted) return;
-    if (_currentEmailData.id.isNotEmpty && !_currentEmailData.isRead) {
+    if (_currentEmailData.folder == EmailFolder.inbox &&
+        _currentEmailData.id.isNotEmpty &&
+        !_currentEmailData.isRead) {
       final user = Provider.of<AuthService>(context, listen: false).currentUser;
       if (user != null) {
         try {
@@ -45,9 +107,6 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
               _currentEmailData = _currentEmailData.copyWith(isRead: true);
             });
           }
-          print(
-            "ViewEmailScreen: Marked email ${_currentEmailData.id} as read.",
-          );
         } catch (e) {
           print("Error marking email as read in ViewEmailScreen: $e");
         }
@@ -55,34 +114,68 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     }
   }
 
+  String _formatShortDate(String dateTimeString) {
+    try {
+      final dateTime = DateTime.parse(dateTimeString).toLocal();
+      return DateFormat('MMM dd', 'en_US').format(dateTime);
+    } catch (e) {
+      return dateTimeString;
+    }
+  }
+
   String _formatFullDateTime(String dateTimeString) {
     try {
       final dateTime = DateTime.parse(dateTimeString).toLocal();
-      return DateFormat('MMM d, yyyy, h:mm a').format(dateTime);
+      return DateFormat("d MMMM yyyy 'at' HH:mm", 'en_US').format(dateTime);
     } catch (e) {
-      print("Error formatting full date time: $e for $dateTimeString");
+      print("Error formatting full date time: $e for string: $dateTimeString");
       return dateTimeString;
     }
   }
 
   Future<void> _handleDeleteEmail() async {
     if (!mounted || _isProcessingAction) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final firestoreService = Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    );
+    final User? currentUser =
+        Provider.of<AuthService>(context, listen: false).currentUser;
+
+    if (currentUser == null) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('User not logged in.')),
+      );
+      return;
+    }
+
+    bool isPermanentDelete = _currentEmailData.folder == EmailFolder.trash;
+    String dialogTitle =
+        isPermanentDelete ? 'Confirm Permanent Deletion' : 'Confirm Deletion';
+    String dialogContent =
+        isPermanentDelete
+            ? 'Are you sure you want to permanently delete this email?'
+            : 'Are you sure you want to move this email to the trash?';
+    String confirmButtonText =
+        isPermanentDelete ? 'Delete Permanently' : 'Move to Trash';
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('Confirm Deletion'),
-          content: const Text(
-            'Are you sure you want to move this email to the trash?',
-          ),
+          title: Text(dialogTitle),
+          content: Text(dialogContent),
           actions: <Widget>[
             TextButton(
               child: const Text('Cancel'),
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
             TextButton(
-              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              child: Text(
+                confirmButtonText,
+                style: TextStyle(color: AppColors.error),
+              ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],
@@ -91,57 +184,50 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     );
 
     if (confirmed != true) return;
-
     if (!mounted) return;
     setState(() => _isProcessingAction = true);
-    final user = Provider.of<AuthService>(context, listen: false).currentUser;
-    final firestoreService = Provider.of<FirestoreService>(
-      context,
-      listen: false,
-    );
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-    if (user != null && _currentEmailData.id.isNotEmpty) {
-      try {
-        await firestoreService.deleteEmail(
-          userId: user.uid,
+    try {
+      if (isPermanentDelete) {
+        await firestoreService.deleteEmailPermanently(
+          userId: currentUser.uid,
           emailId: _currentEmailData.id,
-          targetFolder: 'trash',
         );
-        if (mounted) {
-          scaffoldMessenger.showSnackBar(
-            const SnackBar(content: Text('Email moved to trash')),
-          );
-          Navigator.pop(context, true);
-        }
-      } catch (e) {
-        if (mounted) {
-          scaffoldMessenger.showSnackBar(
-            SnackBar(content: Text('Error deleting email: ${e.toString()}')),
-          );
-        }
-        print("Error deleting email: $e");
-      } finally {
-        if (mounted) {
-          setState(() => _isProcessingAction = false);
-        }
-      }
-    } else {
-      if (mounted) {
         scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Cannot delete email, missing user or email information.',
-            ),
-          ),
+          const SnackBar(content: Text('Email permanently deleted')),
         );
-        setState(() => _isProcessingAction = false);
+      } else {
+        await firestoreService.deleteEmail(
+          userId: currentUser.uid,
+          emailId: _currentEmailData.id,
+          currentFolder: _currentEmailData.folder,
+          targetFolder: EmailFolder.trash,
+        );
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Email moved to trash')),
+        );
       }
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted)
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+    } finally {
+      if (mounted) setState(() => _isProcessingAction = false);
     }
   }
 
   Future<void> _toggleReadStatus() async {
     if (!mounted || _isProcessingAction || _currentEmailData.id.isEmpty) return;
+    if (_currentEmailData.folder != EmailFolder.inbox) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Read status can only be changed for inbox emails.'),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isProcessingAction = true);
     final user = Provider.of<AuthService>(context, listen: false).currentUser;
@@ -160,11 +246,12 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
           isRead: newReadStatus,
         );
         if (mounted) {
-          setState(() {
-            _currentEmailData = _currentEmailData.copyWith(
-              isRead: newReadStatus,
-            );
-          });
+          setState(
+            () =>
+                _currentEmailData = _currentEmailData.copyWith(
+                  isRead: newReadStatus,
+                ),
+          );
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(
@@ -174,23 +261,17 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
           );
         }
       } catch (e) {
-        if (mounted) {
+        if (mounted)
           scaffoldMessenger.showSnackBar(
             SnackBar(content: Text('Error updating read status: $e')),
           );
-        }
-        print("Error toggling read status: $e");
       } finally {
-        if (mounted) {
-          setState(() => _isProcessingAction = false);
-        }
+        if (mounted) setState(() => _isProcessingAction = false);
       }
     } else {
       if (mounted) {
         scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('User not found to update read status.'),
-          ),
+          const SnackBar(content: Text('User not found.')),
         );
         setState(() => _isProcessingAction = false);
       }
@@ -205,7 +286,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
         builder:
             (context) => ComposeEmailScreen(replyToEmail: _currentEmailData),
       ),
-    );
+    ).then((_) => _refreshDataIfNeeded());
   }
 
   void _handleForwardEmail() {
@@ -216,144 +297,279 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
         builder:
             (context) => ComposeEmailScreen(forwardEmail: _currentEmailData),
       ),
+    ).then((_) => _refreshDataIfNeeded());
+  }
+
+  void _refreshDataIfNeeded() {
+    /* Placeholder for potential refresh logic */
+  }
+
+  String _getFirstName(String? fullName) {
+    if (fullName == null || fullName.trim().isEmpty) {
+      return "Unknown";
+    }
+    return fullName.trim().split(' ').first;
+  }
+
+  Widget _buildRecipientSummary() {
+    List<String> toCcDisplayNames = [];
+    bool currentUserIsInToCc = false;
+
+    for (var recipient in _currentEmailData.to) {
+      if (recipient['userId'] == _currentUserId) {
+        if (!currentUserIsInToCc) {
+          toCcDisplayNames.add("me");
+          currentUserIsInToCc = true;
+        }
+      } else {
+        toCcDisplayNames.add(_getFirstName(recipient['displayName']));
+      }
+    }
+
+    if (_currentEmailData.cc != null) {
+      for (var recipient in _currentEmailData.cc!) {
+        if (recipient['userId'] == _currentUserId) {
+          if (!currentUserIsInToCc) {
+            toCcDisplayNames.add("me");
+            currentUserIsInToCc = true;
+          }
+        } else {
+          toCcDisplayNames.add(_getFirstName(recipient['displayName']));
+        }
+      }
+    }
+
+    List<String> uniqueDisplayNames = [];
+    if (currentUserIsInToCc) {
+      uniqueDisplayNames.add("me");
+    }
+    for (String name in toCcDisplayNames) {
+      if (name != "me" && !uniqueDisplayNames.contains(name)) {
+        uniqueDisplayNames.add(name);
+      }
+    }
+
+    String toCcSummary = "";
+    if (uniqueDisplayNames.isNotEmpty) {
+      toCcSummary = "to ${uniqueDisplayNames.join(', ')}";
+    }
+
+    String bccSummarySegment = "";
+    bool currentUserIsInBccList =
+        _currentEmailData.bcc?.any((r) => r['userId'] == _currentUserId) ??
+        false;
+
+    final bool isCurrentUserTheOriginalSender =
+        _currentUserId != null &&
+        _currentEmailData.from?['userId'] == _currentUserId;
+
+    if (currentUserIsInBccList && !isCurrentUserTheOriginalSender) {
+      if (toCcSummary.isNotEmpty) {
+        bccSummarySegment = ", bcc: me";
+      } else {
+        return Text(
+          "bcc: me",
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+        );
+      }
+    }
+
+    String finalSummary = toCcSummary + bccSummarySegment;
+
+    if (finalSummary.isEmpty) {
+      List<String> allRecipientFirstNames = [];
+      _currentEmailData.to.forEach(
+        (r) => allRecipientFirstNames.add(_getFirstName(r['displayName'])),
+      );
+      _currentEmailData.cc?.forEach(
+        (r) => allRecipientFirstNames.add(_getFirstName(r['displayName'])),
+      );
+
+      if (allRecipientFirstNames.isNotEmpty) {
+        finalSummary =
+            "to ${LinkedHashSet<String>.from(allRecipientFirstNames).toList().join(', ')}";
+      } else {
+        return const SizedBox.shrink();
+      }
+    }
+
+    if (finalSummary.startsWith(", ")) {
+      finalSummary = finalSummary.substring(2);
+    }
+
+    return Text(
+      finalSummary,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: Colors.grey[600], fontSize: 13),
     );
   }
 
-  Widget _buildRecipientRow(
-    BuildContext context,
+  Widget _buildDetailedRecipientInfo(
     String label,
-    List<Map<String, dynamic>> recipients, [
-    String? currentUserEmailForToMeLogic,
-  ]) {
-    if (recipients.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    String displayText;
-    bool showDropdown = true;
-
-    if (label == "To:" &&
-        currentUserEmailForToMeLogic != null &&
-        recipients.length == 1 &&
-        recipients.first['email'] == currentUserEmailForToMeLogic) {
-      displayText = 'me';
-      showDropdown = false;
-    } else {
-      displayText = recipients
-          .map((r) {
-            String displayName = r['displayName'] as String? ?? '';
-            String email = r['email'] as String? ?? '';
-
-            if (displayName.isNotEmpty) {
-              return email.isNotEmpty ? '$displayName <$email>' : displayName;
-            }
-            return email.isNotEmpty ? email : 'Unknown';
-          })
-          .join(', ');
-    }
-
+    List<Map<String, String>> recipients, {
+    bool hideLabelColon = false,
+  }) {
+    if (recipients.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(top: 1.0, bottom: 1.0),
-      child: GestureDetector(
-        onTap: () {
-          showDialog(
-            context: context,
-            builder: (BuildContext dialogContext) {
-              return AlertDialog(
-                title: Text(label.replaceAll(':', '')),
-                content: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children:
-                        recipients.map((r) {
-                          String displayName =
-                              r['displayName'] as String? ?? '';
-                          String email = r['email'] as String? ?? 'no-email';
-                          String textToShow;
-                          if (displayName.isNotEmpty) {
-                            textToShow =
-                                email.isNotEmpty
-                                    ? '$displayName <$email>'
-                                    : displayName;
-                          } else {
-                            textToShow =
-                                email.isNotEmpty ? email : 'Unknown recipient';
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2.0),
-                            child: Text(textToShow),
-                          );
-                        }).toList(),
-                  ),
-                ),
-                actions: <Widget>[
-                  TextButton(
-                    child: const Text('Close'),
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                displayText,
-                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
+      padding: _detailItemPadding,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: _labelWidth,
+            child: Text(
+              hideLabelColon ? label : '$label:',
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            if (showDropdown)
-              Icon(Icons.expand_more, size: 18, color: Colors.grey[700]),
-          ],
-        ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children:
+                  recipients.map((r) {
+                    String name = r['displayName'] ?? 'Unknown Name';
+                    String email =
+                        r['email'] ?? r['userId'] ?? 'Email not available';
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom:
+                            recipients.indexOf(r) < recipients.length - 1
+                                ? 4.0
+                                : 0.0,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: TextStyle(
+                              color: Colors.grey[800],
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            email,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildRecipientDetails(
-    BuildContext context,
-    EmailData emailData,
-    String? currentUserEmail,
-  ) {
-    final List<Map<String, dynamic>> ccRecipients = emailData.cc ?? [];
-    final List<Map<String, dynamic>> bccRecipients = emailData.bcc ?? [];
+  Widget _buildBccEntry() {
+    final bool isCurrentUserTheOriginalSender =
+        _currentUserId != null &&
+        _currentEmailData.from?['userId'] == _currentUserId;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (emailData.to.isNotEmpty)
-          _buildRecipientRow(context, "To:", emailData.to, currentUserEmail),
-        if (ccRecipients.isNotEmpty)
-          _buildRecipientRow(context, "Cc:", ccRecipients),
-        if (bccRecipients.isNotEmpty)
-          _buildRecipientRow(context, "Bcc:", bccRecipients),
-      ],
-    );
+    if (_currentEmailData.bcc == null || _currentEmailData.bcc!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (isCurrentUserTheOriginalSender) {
+      return _buildDetailedRecipientInfo("Bcc", _currentEmailData.bcc!);
+    } else {
+      if (_currentUserId == null || _currentUserEmail == null) {
+        return const SizedBox.shrink();
+      }
+      final bool isCurrentUserInBccList = _currentEmailData.bcc!.any(
+        (r) => r['userId'] == _currentUserId,
+      );
+
+      if (isCurrentUserInBccList) {
+        return Padding(
+          padding: _detailItemPadding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: _labelWidth,
+                child: Text(
+                  'Bcc:',
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'me',
+                      style: TextStyle(color: Colors.grey[800], fontSize: 14),
+                    ),
+                    Text(
+                      _currentUserEmail!,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        return const SizedBox.shrink();
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUserEmail =
-        Provider.of<AuthService>(context, listen: false).currentUser?.email;
+    String headerDisplayName;
+    String emailForFromLineInDetails =
+        _senderDisplayableEmail ??
+        _currentEmailData.from?['email'] ??
+        _currentEmailData.senderUid;
 
-    String senderDisplay = _currentEmailData.senderName;
-    if (senderDisplay.isEmpty) {
-      senderDisplay = _currentEmailData.senderEmail;
+    final bool isCurrentUserTheSender =
+        _currentUserId != null &&
+        _currentEmailData.from?['userId'] == _currentUserId;
+
+    if (isCurrentUserTheSender) {
+      headerDisplayName = "Me";
+    } else {
+      headerDisplayName =
+          _currentEmailData.from?['displayName'] ??
+          _currentEmailData.senderName;
+    }
+
+    String nameForAvatarInitials = headerDisplayName;
+    if (headerDisplayName == "Me") {
+      final currentUser =
+          Provider.of<AuthService>(context, listen: false).currentUser;
+      nameForAvatarInitials =
+          currentUser?.displayName ?? currentUser?.email ?? "Me";
     }
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: AppColors.appBarBackground,
+        elevation: 1,
+        iconTheme: IconThemeData(color: AppColors.primary),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context, _currentEmailData.isRead),
+        ),
+        actionsIconTheme: IconThemeData(color: AppColors.primary),
         actions: [
           if (_isProcessingAction)
             const Padding(
@@ -361,20 +577,26 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.primary,
+                ),
               ),
             )
           else ...[
-            IconButton(
-              icon: Icon(
-                _currentEmailData.isRead
-                    ? Icons.mark_email_read_outlined
-                    : Icons.mark_email_unread_outlined,
+            if (_currentEmailData.folder == EmailFolder.inbox)
+              IconButton(
+                icon: Icon(
+                  _currentEmailData.isRead
+                      ? Icons.mark_email_read_outlined
+                      : Icons.mark_email_unread_outlined,
+                ),
+                tooltip:
+                    _currentEmailData.isRead
+                        ? 'Mark as unread'
+                        : 'Mark as read',
+                onPressed: _toggleReadStatus,
               ),
-              tooltip:
-                  _currentEmailData.isRead ? 'Mark as unread' : 'Mark as read',
-              onPressed: _toggleReadStatus,
-            ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Delete email',
@@ -398,67 +620,227 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
             ),
             const SizedBox(height: 16),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  backgroundColor: Theme.of(
-                    context,
-                  ).primaryColor.withOpacity(0.1),
-                  child: Text(
-                    _currentEmailData.senderName.isNotEmpty
-                        ? _currentEmailData.senderName[0].toUpperCase()
-                        : (_currentEmailData.senderEmail.isNotEmpty == true
-                            ? _currentEmailData.senderEmail[0].toUpperCase()
-                            : '?'),
-                    style: TextStyle(
-                      color: Theme.of(context).primaryColor,
-                      fontWeight: FontWeight.bold,
+                _isLoadingSenderProfile
+                    ? CircleAvatar(
+                      backgroundColor: AppColors.primary.withOpacity(0.1),
+                      child: const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    )
+                    : CircleAvatar(
+                      backgroundColor: AppColors.primary.withOpacity(0.1),
+                      backgroundImage:
+                          (_senderPhotoUrl != null &&
+                                  _senderPhotoUrl!.isNotEmpty)
+                              ? NetworkImage(_senderPhotoUrl!)
+                              : null,
+                      child:
+                          (_senderPhotoUrl == null || _senderPhotoUrl!.isEmpty)
+                              ? Text(
+                                (nameForAvatarInitials.isNotEmpty
+                                        ? nameForAvatarInitials[0]
+                                        : '?')
+                                    .toUpperCase(),
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                              : null,
                     ),
-                  ),
-                ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        senderDisplay,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              headerDisplayName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: AppColors.appBarForeground,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatShortDate(_currentEmailData.time),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
-                      _buildRecipientDetails(
-                        context,
-                        _currentEmailData,
-                        currentUserEmail,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _formatFullDateTime(_currentEmailData.time),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      GestureDetector(
+                        onTap:
+                            () => setState(() => _showDetails = !_showDetails),
+                        child: Row(
+                          children: [
+                            Expanded(child: _buildRecipientSummary()),
+                            Icon(
+                              _showDetails
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              size: 20,
+                              color: AppColors.secondaryIcon,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
+            if (_showDetails)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Divider(height: 12),
+                    Padding(
+                      padding: _detailItemPadding,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: _labelWidth,
+                            child: Text(
+                              'From:',
+                              style: TextStyle(
+                                color: AppColors.secondaryText,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _currentEmailData.from?['displayName'] ??
+                                      _currentEmailData.senderName,
+                                  style: TextStyle(
+                                    color: AppColors.appBarForeground,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  emailForFromLineInDetails,
+                                  style: TextStyle(
+                                    color: AppColors.secondaryText,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildDetailedRecipientInfo('To', _currentEmailData.to),
+                    if (_currentEmailData.cc?.isNotEmpty ?? false)
+                      _buildDetailedRecipientInfo('Cc', _currentEmailData.cc!),
+                    _buildBccEntry(), // Updated Bcc Entry
+                    Padding(
+                      padding: _detailItemPadding,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: _labelWidth,
+                            child: Text(
+                              'Date:',
+                              style: TextStyle(
+                                color: AppColors.secondaryText,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              _formatFullDateTime(_currentEmailData.time),
+                              style: TextStyle(
+                                color: AppColors.appBarForeground,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 12),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
-            Divider(color: Colors.grey[300]),
+            if (!_showDetails) const Divider(),
             const SizedBox(height: 12),
             SelectableText(
               _currentEmailData.body.isNotEmpty
                   ? _currentEmailData.body
                   : '(No content)',
-              style: const TextStyle(fontSize: 16, height: 1.6),
+              style: const TextStyle(fontSize: 16, height: 1.5),
             ),
+            const SizedBox(height: 20),
+            if (_currentEmailData.attachments?.isNotEmpty ?? false) ...[
+              Text(
+                'Attachments:',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.appBarForeground,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8.0,
+                runSpacing: 4.0,
+                children:
+                    _currentEmailData.attachments!.map((attachment) {
+                      return ActionChip(
+                        avatar: Icon(
+                          Icons.attach_file,
+                          size: 16,
+                          color: AppColors.secondaryIcon,
+                        ),
+                        label: Text(attachment['name'] ?? 'file'),
+                        onPressed:
+                            () => ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Downloading ${attachment['name'] ?? 'file'}... (Not implemented)',
+                                ),
+                              ),
+                            ),
+                        backgroundColor: Colors.grey[200],
+                        labelStyle: TextStyle(color: AppColors.secondaryText),
+                      );
+                    }).toList(),
+              ),
+              const SizedBox(height: 20),
+            ],
           ],
         ),
       ),
       bottomNavigationBar: BottomAppBar(
         elevation: 4.0,
+        color: AppColors.appBarBackground,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
           child: Row(
@@ -468,17 +850,13 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                 icon: const Icon(Icons.reply_outlined),
                 label: const Text('Reply'),
                 onPressed: _handleReplyEmail,
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                ),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
               ),
               TextButton.icon(
                 icon: const Icon(Icons.forward_outlined),
                 label: const Text('Forward'),
                 onPressed: _handleForwardEmail,
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                ),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
               ),
             ],
           ),

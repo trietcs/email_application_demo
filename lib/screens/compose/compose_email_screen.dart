@@ -51,22 +51,24 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
   }
 
   String _formatRecipientForDisplay(Map<String, String> recipientMap) {
-    return recipientMap['displayName'] ?? recipientMap['userId'] ?? '';
+    return recipientMap['email'] ??
+        recipientMap['displayName'] ??
+        recipientMap['userId'] ??
+        '';
   }
 
   void _populateFields() {
     if (widget.replyToEmail != null) {
       final originalEmail = widget.replyToEmail!;
-      _toController.text = _formatRecipientForDisplay({
-        'userId': originalEmail.senderEmail,
-        'displayName': originalEmail.senderName,
-      });
+      _toController.text =
+          originalEmail.from['email'] ?? originalEmail.senderName;
+
       _subjectController.text =
           originalEmail.subject.toLowerCase().startsWith('re:')
               ? originalEmail.subject
               : 'Re: ${originalEmail.subject}';
       _bodyController.text =
-          '\n\n\n--- Original message on ${_formatDateTimeForQuote(originalEmail.time)} ---\nFrom: ${originalEmail.senderName} <${originalEmail.senderEmail}>\nSubject: ${originalEmail.subject}\n\n${originalEmail.body}';
+          '\n\n\n--- Original message on ${_formatDateTimeForQuote(originalEmail.time)} ---\nFrom: ${originalEmail.from['displayName'] ?? originalEmail.senderName} <${originalEmail.from['email'] ?? originalEmail.senderEmail}>\nSubject: ${originalEmail.subject}\n\n${originalEmail.body}';
       _bodyController.selection = TextSelection.fromPosition(
         const TextPosition(offset: 0),
       );
@@ -84,7 +86,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
               ? originalEmail.subject
               : 'Fw: ${originalEmail.subject}';
       _bodyController.text =
-          '\n\n\n--- Forwarded message ---\nFrom: ${originalEmail.senderName} <${originalEmail.senderEmail}>\nDate: ${_formatDateTimeForQuote(originalEmail.time)}\nSubject: ${originalEmail.subject}\nTo: ${originalEmail.to.map((r) => _formatRecipientForDisplay(r)).join(', ')}\n${originalEmail.cc != null && originalEmail.cc!.isNotEmpty ? 'Cc: ${originalEmail.cc!.map((r) => _formatRecipientForDisplay(r)).join(', ')}\n' : ''}\n${originalEmail.body}';
+          '\n\n\n--- Forwarded message ---\nFrom: ${originalEmail.from['displayName'] ?? originalEmail.senderName} <${originalEmail.from['email'] ?? originalEmail.senderEmail}>\nDate: ${_formatDateTimeForQuote(originalEmail.time)}\nSubject: ${originalEmail.subject}\nTo: ${originalEmail.to.map((r) => _formatRecipientForDisplay(r)).join(', ')}\n${originalEmail.cc != null && originalEmail.cc!.isNotEmpty ? 'Cc: ${originalEmail.cc!.map((r) => _formatRecipientForDisplay(r)).join(', ')}\n' : ''}\n${originalEmail.body}';
       if (originalEmail.attachments != null &&
           originalEmail.attachments!.isNotEmpty) {
         _initialAttachmentsFromDraft = List<Map<String, String>>.from(
@@ -176,28 +178,42 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
             .where((e) => e.isNotEmpty)
             .toList();
     List<Map<String, String>> recipientsData = [];
-    bool allFound = true;
+    bool allFoundOrValid = true;
 
     for (String contact in contacts) {
       final userInfo = await fs.findUserByContactInfo(contact);
       if (userInfo != null &&
           userInfo['userId'] != null &&
-          userInfo['displayName'] != null) {
+          userInfo['displayName'] != null &&
+          userInfo['email'] != null) {
         recipientsData.add({
           'userId': userInfo['userId']!,
           'displayName': userInfo['displayName']!,
+          'email': userInfo['email']!,
         });
       } else {
-        allFound = false;
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Recipient not found: $contact')),
-          );
+        if (RegExp(
+          r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
+        ).hasMatch(contact)) {
+          recipientsData.add({
+            'userId': contact,
+            'displayName': contact.split('@')[0],
+            'email': contact,
+          });
+        } else {
+          allFoundOrValid = false;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Recipient not found or invalid: $contact'),
+              ),
+            );
+          }
+          break;
         }
-        break;
       }
     }
-    if (!allFound) return [];
+    if (!allFoundOrValid) return [];
     return recipientsData;
   }
 
@@ -229,15 +245,27 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       firestoreService,
     );
 
-    if (toRecipients.isEmpty && ccRecipients.isEmpty && bccRecipients.isEmpty) {
-      if (_toController.text.isNotEmpty ||
-          _ccController.text.isNotEmpty ||
-          _bccController.text.isNotEmpty) {
-        if (mounted) {
-          setState(() => _isProcessing = false);
-        }
-        return;
+    bool hasTo = _toController.text.trim().isNotEmpty;
+    bool hasCc = _ccController.text.trim().isNotEmpty;
+    bool hasBcc = _bccController.text.trim().isNotEmpty;
+
+    if ((hasTo && toRecipients.isEmpty) ||
+        (hasCc && ccRecipients.isEmpty) ||
+        (hasBcc && bccRecipients.isEmpty)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'One or more recipients could not be validated. Please check the addresses.',
+            ),
+          ),
+        );
+        setState(() => _isProcessing = false);
       }
+      return;
+    }
+
+    if (toRecipients.isEmpty && ccRecipients.isEmpty && bccRecipients.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -313,38 +341,28 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
 
     bool hasActualChangesFromDraft = true;
     if (widget.draftToEdit != null) {
+      final draft = widget.draftToEdit!;
       hasActualChangesFromDraft =
           !(_toController.text ==
-                  (widget.draftToEdit!.to
-                      .map(_formatRecipientForDisplay)
-                      .join(', ')) &&
+                  draft.to.map(_formatRecipientForDisplay).join(', ') &&
               _ccController.text ==
-                  (widget.draftToEdit!.cc
-                          ?.map(_formatRecipientForDisplay)
-                          .join(', ') ??
+                  (draft.cc?.map(_formatRecipientForDisplay).join(', ') ??
                       '') &&
               _bccController.text ==
-                  (widget.draftToEdit!.bcc
-                          ?.map(_formatRecipientForDisplay)
-                          .join(', ') ??
+                  (draft.bcc?.map(_formatRecipientForDisplay).join(', ') ??
                       '') &&
-              _subjectController.text == widget.draftToEdit!.subject &&
-              _bodyController.text == widget.draftToEdit!.body &&
+              _subjectController.text == draft.subject &&
+              _bodyController.text == draft.body &&
               _attachments.isEmpty &&
               _initialAttachmentsFromDraft.length ==
-                  (widget.draftToEdit!.attachments?.length ?? 0));
+                  (draft.attachments?.length ?? 0));
     }
 
     if (!hasContentToSave && _editingDraftId.isEmpty) {
-      print(
-        "ComposeEmailScreen: Nothing to save (new email is empty). Closing.",
-      );
       if (mounted) Navigator.pop(context, false);
       return;
     }
-
     if (!hasActualChangesFromDraft && _editingDraftId.isNotEmpty) {
-      print("ComposeEmailScreen: No actual changes from draft. Closing.");
       if (mounted) Navigator.pop(context, false);
       return;
     }
@@ -360,24 +378,58 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
             ? currentUser.displayName!
             : (currentUser.email?.split('@')[0] ?? 'Sender');
 
-    List<Map<String, String>> formatRecipientsForDraft(String controllerText) {
-      return controllerText
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .map((contact) => {'userId': '', 'displayName': contact})
-          .toList();
-    }
+    List<Map<String, String>> toRecipientsDraft =
+        await _getRecipientsDataByEmail(_toController.text, firestoreService);
+    List<Map<String, String>> ccRecipientsDraft =
+        await _getRecipientsDataByEmail(_ccController.text, firestoreService);
+    List<Map<String, String>> bccRecipientsDraft =
+        await _getRecipientsDataByEmail(_bccController.text, firestoreService);
 
-    List<Map<String, String>> toRecipientsDraft = formatRecipientsForDraft(
-      _toController.text,
-    );
-    List<Map<String, String>> ccRecipientsDraft = formatRecipientsForDraft(
-      _ccController.text,
-    );
-    List<Map<String, String>> bccRecipientsDraft = formatRecipientsForDraft(
-      _bccController.text,
-    );
+    if (_toController.text.isNotEmpty && toRecipientsDraft.isEmpty) {
+      toRecipientsDraft =
+          _toController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .map(
+                (contact) => {
+                  'userId': '',
+                  'displayName': contact,
+                  'email': contact,
+                },
+              )
+              .toList();
+    }
+    if (_ccController.text.isNotEmpty && ccRecipientsDraft.isEmpty) {
+      ccRecipientsDraft =
+          _ccController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .map(
+                (contact) => {
+                  'userId': '',
+                  'displayName': contact,
+                  'email': contact,
+                },
+              )
+              .toList();
+    }
+    if (_bccController.text.isNotEmpty && bccRecipientsDraft.isEmpty) {
+      bccRecipientsDraft =
+          _bccController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .map(
+                (contact) => {
+                  'userId': '',
+                  'displayName': contact,
+                  'email': contact,
+                },
+              )
+              .toList();
+    }
 
     final String draftIdForStorage =
         _editingDraftId.isNotEmpty
@@ -406,23 +458,22 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
           attachments: allAttachmentsForDraft,
         );
       } else {
-        if (hasContentToSave) {
-          _editingDraftId = await firestoreService.saveDraft(
-            userId: senderId,
-            senderDisplayName: senderDisplayName,
-            to: toRecipientsDraft,
-            cc: ccRecipientsDraft,
-            bcc: bccRecipientsDraft,
-            subject: _subjectController.text,
-            body: _bodyController.text,
-            attachments: allAttachmentsForDraft,
-          );
-        }
+        _editingDraftId = await firestoreService.saveDraft(
+          userId: senderId,
+          senderDisplayName: senderDisplayName,
+          to: toRecipientsDraft,
+          cc: ccRecipientsDraft,
+          bcc: bccRecipientsDraft,
+          subject: _subjectController.text,
+          body: _bodyController.text,
+          attachments: allAttachmentsForDraft,
+        );
       }
-      if (mounted && hasContentToSave && hasActualChangesFromDraft) {
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Saved to drafts')));
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -434,7 +485,6 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
-        Navigator.pop(context, true);
       }
     }
   }
@@ -521,6 +571,15 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
       );
     }
 
+    String currentSenderDisplayEmail = currentUser.email ?? "My Email";
+    String fromPrefix = "From: $currentSenderDisplayEmail";
+    if (widget.draftToEdit?.from['email'] != null &&
+        widget.draftToEdit!.from['email']!.isNotEmpty) {
+      fromPrefix = "From: ${widget.draftToEdit!.from['email']}";
+    } else if (currentUser.email != null && currentUser.email!.isNotEmpty) {
+      fromPrefix = "From: ${currentUser.email}";
+    }
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.appBarBackground,
@@ -576,27 +635,40 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildRecipientField(
-                      controller: _toController,
-                      label: "To:",
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  vertical: _textFieldVerticalPadding,
+                  horizontal: 0,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      fromPrefix,
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      _showCcBccFields ? Icons.expand_less : Icons.expand_more,
-                      color: AppColors.secondaryIcon,
+                    const Spacer(),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(
+                        _showCcBccFields
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        color: AppColors.secondaryIcon,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _showCcBccFields = !_showCcBccFields;
+                        });
+                      },
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _showCcBccFields = !_showCcBccFields;
-                      });
-                    },
-                  ),
-                ],
+                  ],
+                ),
               ),
+              _buildRecipientField(controller: _toController, label: "To:"),
               if (_showCcBccFields) ...[
                 _buildRecipientField(controller: _ccController, label: "Cc:"),
                 _buildRecipientField(controller: _bccController, label: "Bcc:"),
@@ -614,9 +686,6 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                   ),
                 ),
                 style: const TextStyle(fontSize: 16),
-                validator: (value) {
-                  return null;
-                },
               ),
               const Divider(height: 1, thickness: 0.5),
               TextFormField(

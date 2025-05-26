@@ -1,12 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
+import 'package:email_application/models/email_folder.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/emails/view_email_screen.dart';
-import 'package:email_application/widgets/email_list_item.dart';
+import 'package:email_application/widgets/email_list_view.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:email_application/config/app_colors.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -26,11 +27,15 @@ class _InboxScreenState extends State<InboxScreen> {
     _loadEmails();
   }
 
-  void _loadEmails() {
+  Future<void> _loadEmails() async {
     if (_currentUser != null) {
       if (mounted) {
         setState(() {
-          _emailsFuture = _fetchEmails(context, _currentUser!.uid, 'inbox');
+          _emailsFuture = _fetchEmails(
+            context,
+            _currentUser!.uid,
+            EmailFolder.inbox,
+          );
         });
       }
     } else {
@@ -55,89 +60,31 @@ class _InboxScreenState extends State<InboxScreen> {
   Future<List<EmailData>> _fetchEmails(
     BuildContext context,
     String userId,
-    String folder,
+    EmailFolder folder,
   ) async {
     final firestoreService = Provider.of<FirestoreService>(
       context,
       listen: false,
     );
-    final emailsData = await firestoreService.getEmails(userId, folder);
+    final List<Map<String, dynamic>> emailsDataMap = await firestoreService
+        .getEmails(userId, folder);
 
     if (!mounted) return [];
 
-    return emailsData.map((emailMap) {
-      Timestamp? timestamp = emailMap['timestamp'] as Timestamp?;
-      String timeString = 'N/A';
-      if (timestamp != null) {
-        try {
-          timeString = timestamp.toDate().toLocal().toString();
-        } catch (e) {
-          print(
-            "Error converting timestamp: $e for email ID ${emailMap['id']}",
-          );
-        }
-      }
-      String body = emailMap['body'] as String? ?? '';
-      String previewText =
-          body.length > 50 ? '${body.substring(0, 50)}...' : body;
-
-      Map<String, dynamic>? fromMap = emailMap['from'] as Map<String, dynamic>?;
-      String senderNameFromData = fromMap?['displayName'] as String? ?? 'N/A';
-      String senderEmailFromData = fromMap?['userId'] as String? ?? '';
-
-      return EmailData(
-        id: emailMap['id'] as String? ?? '',
-        senderName: senderNameFromData,
-        senderEmail: senderEmailFromData,
-        subject: emailMap['subject'] as String? ?? '(No Subject)',
-        previewText: previewText,
-        body: body,
-        time: timeString,
-        isRead: emailMap['isRead'] as bool? ?? true,
-        to:
-            (emailMap['to'] as List<dynamic>?)
-                ?.map((e) => e as Map<String, dynamic>)
-                .map(
-                  (recipientMap) => {
-                    'userId': recipientMap['userId'] as String? ?? '',
-                    'displayName': recipientMap['displayName'] as String? ?? '',
-                  },
-                )
-                .toList() ??
-            [],
-        cc:
-            (emailMap['cc'] as List<dynamic>?)
-                ?.map((e) => Map<String, String>.from(e as Map))
-                .toList() ??
-            [],
-        bcc:
-            (emailMap['bcc'] as List<dynamic>?)
-                ?.map((e) => Map<String, String>.from(e as Map))
-                .toList() ??
-            [],
-        attachments:
-            (emailMap['attachments'] as List<dynamic>?)
-                ?.map((e) => Map<String, String>.from(e as Map))
-                .toList() ??
-            [],
-        folder: emailMap['folder'] as String? ?? folder,
-      );
-    }).toList();
+    return emailsDataMap
+        .map((map) => EmailData.fromMap(map, map['id'] as String? ?? ''))
+        .toList();
   }
 
   Future<void> _handleEmailTap(EmailData email) async {
     if (_currentUser == null || !mounted) return;
-
-    bool wasInitiallyUnread = !email.isRead;
-
     final resultFromView = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ViewEmailScreen(emailData: email),
       ),
     );
-
-    if (resultFromView == true || wasInitiallyUnread) {
+    if (resultFromView == true || (email.isRead != true && mounted)) {
       _loadEmails();
     }
   }
@@ -145,91 +92,40 @@ class _InboxScreenState extends State<InboxScreen> {
   @override
   Widget build(BuildContext context) {
     if (_currentUser == null) {
-      return Scaffold(
-        body: const Center(child: Text('Please log in to view your inbox.')),
+      return const Scaffold(
+        body: Center(child: Text('Please log in to view your inbox.')),
       );
     }
 
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async => _loadEmails(),
+        color: AppColors.primary,
         child: FutureBuilder<List<EmailData>>(
           future: _emailsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              );
             }
 
             if (snapshot.hasError) {
               print('InboxScreen FutureBuilder Error: ${snapshot.error}');
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.red,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error loading emails: ${snapshot.error}',
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Pull down to try again.',
-                          style: TextStyle(fontStyle: FontStyle.italic),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              return EmailListErrorView(
+                error: snapshot.error!,
+                onRetry: _loadEmails,
               );
             }
 
             final emails = snapshot.data ?? [];
-            if (emails.isEmpty) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-                  const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 60,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Your inbox is empty!',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            return ListView.builder(
-              itemCount: emails.length,
-              itemBuilder: (context, index) {
-                final email = emails[index];
-                return EmailListItem(
-                  email: email,
-                  onTap: () => _handleEmailTap(email),
-                  onReadStatusChanged: _loadEmails,
-                  onDeleteOrMove: _loadEmails,
-                );
-              },
+            return EmailListView(
+              emails: emails,
+              currentScreenFolder: EmailFolder.inbox,
+              onEmailTap: _handleEmailTap,
+              onRefresh: _loadEmails,
+              onReadStatusChanged: _loadEmails,
+              onDeleteOrMove: _loadEmails,
             );
           },
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
+import 'package:email_application/models/email_folder.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:intl/intl.dart';
@@ -8,18 +9,18 @@ import 'package:email_application/config/app_colors.dart';
 
 class EmailListItem extends StatefulWidget {
   final EmailData email;
+  final EmailFolder currentScreenFolder;
   final VoidCallback? onTap;
   final VoidCallback? onReadStatusChanged;
   final VoidCallback? onDeleteOrMove;
-  final bool isSentItem;
 
   const EmailListItem({
     super.key,
     required this.email,
+    required this.currentScreenFolder,
     this.onTap,
     this.onReadStatusChanged,
     this.onDeleteOrMove,
-    this.isSentItem = false,
   });
 
   @override
@@ -28,7 +29,7 @@ class EmailListItem extends StatefulWidget {
 
 class _EmailListItemState extends State<EmailListItem> {
   late EmailData _currentEmail;
-  String? _fetchedDisplayName;
+  String? _nameForAvatarAndInitial;
   String? _photoUrl;
   bool _isLoadingProfileInfo = true;
 
@@ -42,41 +43,96 @@ class _EmailListItemState extends State<EmailListItem> {
   @override
   void didUpdateWidget(covariant EmailListItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    bool emailChanged = widget.email.id != oldWidget.email.id;
+    bool emailChanged =
+        widget.email.id != oldWidget.email.id ||
+        widget.email.from['userId'] != oldWidget.email.from['userId'];
     if (emailChanged || widget.email.isRead != _currentEmail.isRead) {
       setState(() {
         _currentEmail = widget.email;
       });
     }
     if (emailChanged ||
-        widget.email.senderEmail != oldWidget.email.senderEmail ||
-        widget.isSentItem != oldWidget.isSentItem) {
+        widget.currentScreenFolder != oldWidget.currentScreenFolder ||
+        widget.email.originalFolder != oldWidget.email.originalFolder) {
       _fetchRelevantProfileInfo();
     }
   }
 
   Future<void> _fetchRelevantProfileInfo() async {
     if (!mounted) return;
-    setState(() => _isLoadingProfileInfo = true);
+    setState(() {
+      _isLoadingProfileInfo = true;
+      _photoUrl = null;
+    });
 
-    final String contactIdToLookup = widget.email.senderEmail;
+    String? contactIdToLookup;
+    String nameForInitialFallback = "Unknown";
 
-    print(
-      "EmailListItem (${widget.email.id}, isSent: ${widget.isSentItem}): Fetching profile for contactId: '$contactIdToLookup'",
-    );
+    final effectiveFolder =
+        widget.currentScreenFolder == EmailFolder.trash
+            ? widget.email.originalFolder ?? widget.email.folder
+            : widget.currentScreenFolder;
 
-    if (contactIdToLookup.isEmpty) {
-      print(
-        "EmailListItem (${widget.email.id}): contactIdToLookup is empty. Using name from EmailData: '${widget.email.senderName}'",
-      );
+    final currentUser =
+        Provider.of<AuthService>(context, listen: false).currentUser;
+
+    switch (effectiveFolder) {
+      case EmailFolder.inbox:
+        contactIdToLookup = widget.email.from['userId'];
+        nameForInitialFallback =
+            widget.email.from['displayName'] ?? 'Unknown Sender';
+        break;
+      case EmailFolder.sent:
+        if (widget.email.to.isNotEmpty) {
+          contactIdToLookup = widget.email.to.first['userId'];
+          nameForInitialFallback =
+              widget.email.to.first['displayName'] ?? 'Unknown Recipient';
+        } else if (widget.email.cc?.isNotEmpty == true) {
+          contactIdToLookup = widget.email.cc!.first['userId'];
+          nameForInitialFallback =
+              widget.email.cc!.first['displayName'] ?? 'Unknown Recipient';
+        } else if (widget.email.bcc?.isNotEmpty == true) {
+          contactIdToLookup = widget.email.bcc!.first['userId'];
+          nameForInitialFallback =
+              widget.email.bcc!.first['displayName'] ?? 'Unknown Recipient';
+        } else {
+          nameForInitialFallback = 'Unknown Recipient';
+        }
+        break;
+      case EmailFolder.drafts:
+        if (currentUser != null) {
+          contactIdToLookup = currentUser.uid;
+          nameForInitialFallback =
+              currentUser.displayName ?? (currentUser.email ?? 'Draft');
+          if (mounted) {
+            setState(() {
+              _nameForAvatarAndInitial = nameForInitialFallback;
+              _photoUrl = currentUser.photoURL;
+              _isLoadingProfileInfo = false;
+            });
+          }
+          return;
+        }
+        break;
+      default:
+        contactIdToLookup = widget.email.from['userId'];
+        nameForInitialFallback = widget.email.from['displayName'] ?? 'Unknown';
+        break;
+    }
+
+    if (mounted) {
       setState(() {
-        _fetchedDisplayName =
-            widget.email.senderName.isNotEmpty
-                ? widget.email.senderName
-                : 'Unknown';
-        _photoUrl = null;
-        _isLoadingProfileInfo = false;
+        _nameForAvatarAndInitial = nameForInitialFallback;
       });
+    }
+
+    if (contactIdToLookup == null || contactIdToLookup.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _photoUrl = null;
+          _isLoadingProfileInfo = false;
+        });
+      }
       return;
     }
 
@@ -88,22 +144,12 @@ class _EmailListItemState extends State<EmailListItem> {
       final userProfile = await firestoreService.getUserProfile(
         contactIdToLookup,
       );
-      print(
-        "EmailListItem (${widget.email.id}): Profile fetched for $contactIdToLookup: $userProfile",
-      );
-
       if (mounted) {
         setState(() {
-          _fetchedDisplayName =
-              userProfile?['displayName'] ??
-              (widget.isSentItem
-                  ? widget.email.senderName.replaceFirst('To: ', '')
-                  : widget.email.senderName);
+          _nameForAvatarAndInitial =
+              userProfile?['displayName'] as String? ?? nameForInitialFallback;
           _photoUrl = userProfile?['photoURL'] as String?;
           _isLoadingProfileInfo = false;
-          print(
-            "EmailListItem (${widget.email.id}): Updated state - DisplayName: $_fetchedDisplayName, PhotoURL: $_photoUrl",
-          );
         });
       }
     } catch (e) {
@@ -112,7 +158,6 @@ class _EmailListItemState extends State<EmailListItem> {
       );
       if (mounted) {
         setState(() {
-          _fetchedDisplayName = widget.email.senderName;
           _photoUrl = null;
           _isLoadingProfileInfo = false;
         });
@@ -141,7 +186,6 @@ class _EmailListItemState extends State<EmailListItem> {
         return DateFormat('MM/dd/yy', 'en_US').format(dateTime);
       }
     } catch (e) {
-      print("Error formatting time: $e for time string: $dateTimeString");
       try {
         return dateTimeString.split('T')[0];
       } catch (_) {
@@ -151,6 +195,10 @@ class _EmailListItemState extends State<EmailListItem> {
   }
 
   Future<void> _toggleReadStatus(BuildContext context) async {
+    if (widget.currentScreenFolder == EmailFolder.drafts ||
+        widget.currentScreenFolder == EmailFolder.sent)
+      return;
+
     final firestoreService = Provider.of<FirestoreService>(
       context,
       listen: false,
@@ -175,16 +223,15 @@ class _EmailListItemState extends State<EmailListItem> {
         isRead: newReadStatus,
       );
       if (mounted) {
-        setState(() => _currentEmail.isRead = newReadStatus);
+        widget.onReadStatusChanged?.call();
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
-              _currentEmail.isRead ? 'Marked as read' : 'Marked as unread',
+              _currentEmail.isRead ? 'Marked as unread' : 'Marked as read',
             ),
           ),
         );
       }
-      widget.onReadStatusChanged?.call();
     } catch (e) {
       if (mounted)
         scaffoldMessenger.showSnackBar(
@@ -210,21 +257,40 @@ class _EmailListItemState extends State<EmailListItem> {
       return;
     }
 
+    bool confirmPermanentDelete = false;
+    String dialogTitle = 'Confirm Deletion';
+    String dialogContent =
+        'Are you sure you want to move this email to the trash?';
+    String confirmButtonText = 'Move to Trash';
+
+    if (widget.currentScreenFolder == EmailFolder.trash) {
+      confirmPermanentDelete = true;
+      dialogTitle = 'Confirm Permanent Deletion';
+      dialogContent = 'Are you sure you want to permanently delete this email?';
+      confirmButtonText = 'Delete Permanently';
+    } else if (widget.currentScreenFolder == EmailFolder.drafts) {
+      confirmPermanentDelete = false;
+      dialogTitle = 'Delete Draft';
+      dialogContent = 'Are you sure you want to move this draft to the trash?';
+      confirmButtonText = 'Move to Trash';
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('Confirm Deletion'),
-          content: const Text(
-            'Are you sure you want to move this email to the trash?',
-          ),
+          title: Text(dialogTitle),
+          content: Text(dialogContent),
           actions: <Widget>[
             TextButton(
               child: const Text('Cancel'),
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
             TextButton(
-              child: Text('Delete', style: TextStyle(color: AppColors.error)),
+              child: Text(
+                confirmButtonText,
+                style: TextStyle(color: AppColors.error),
+              ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],
@@ -235,20 +301,40 @@ class _EmailListItemState extends State<EmailListItem> {
     if (confirmed != true) return;
 
     try {
-      await firestoreService.deleteEmail(
-        userId: userId,
-        emailId: _currentEmail.id,
-        targetFolder: 'trash',
-      );
-      if (mounted)
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Moved to Trash')),
+      if (confirmPermanentDelete) {
+        await firestoreService.deleteEmailPermanently(
+          userId: userId,
+          emailId: _currentEmail.id,
         );
+        if (mounted)
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(content: Text('Email permanently deleted')),
+          );
+      } else {
+        EmailFolder folderToSaveAsOriginal = widget.currentScreenFolder;
+        await firestoreService.deleteEmail(
+          userId: userId,
+          emailId: _currentEmail.id,
+          currentFolder: folderToSaveAsOriginal,
+          targetFolder: EmailFolder.trash,
+        );
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.currentScreenFolder == EmailFolder.drafts
+                    ? 'Draft moved to trash'
+                    : 'Email moved to trash',
+              ),
+            ),
+          );
+        }
+      }
       widget.onDeleteOrMove?.call();
     } catch (e) {
       if (mounted)
         scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('Error deleting email: ${e.toString()}')),
+          SnackBar(content: Text('Error performing action: ${e.toString()}')),
         );
     }
   }
@@ -256,31 +342,89 @@ class _EmailListItemState extends State<EmailListItem> {
   @override
   Widget build(BuildContext context) {
     final bool isUnread = !_currentEmail.isRead;
-    final Color itemTextColor = isUnread ? Colors.black87 : Colors.black54;
-    final FontWeight itemFontWeight =
-        isUnread ? FontWeight.bold : FontWeight.normal;
 
-    String nameToDisplay =
-        _isLoadingProfileInfo
-            ? "..."
-            : (_fetchedDisplayName ?? widget.email.senderName);
+    final EmailFolder displayContextFolder =
+        widget.currentScreenFolder == EmailFolder.trash
+            ? _currentEmail.originalFolder ?? _currentEmail.folder
+            : widget.currentScreenFolder;
 
-    if (widget.isSentItem &&
-        nameToDisplay.isNotEmpty &&
-        nameToDisplay != "..." &&
-        !nameToDisplay.toLowerCase().startsWith('to: ')) {
-      nameToDisplay = 'To: $nameToDisplay';
+    bool isActuallyDraftDisplay = displayContextFolder == EmailFolder.drafts;
+
+    Color displayNameColor =
+        (isUnread && !isActuallyDraftDisplay) ? Colors.black87 : Colors.black54;
+    FontWeight displayNameFontWeight =
+        (isUnread && !isActuallyDraftDisplay)
+            ? FontWeight.bold
+            : FontWeight.normal;
+    FontWeight itemFontWeight =
+        (isUnread && !isActuallyDraftDisplay)
+            ? FontWeight.bold
+            : FontWeight.normal;
+    Color itemTextColor =
+        (isUnread && !isActuallyDraftDisplay) ? Colors.black87 : Colors.black54;
+
+    String nameToDisplay;
+
+    switch (displayContextFolder) {
+      case EmailFolder.inbox:
+        nameToDisplay =
+            _currentEmail.from['displayName'] ?? _currentEmail.senderName;
+        break;
+      case EmailFolder.sent:
+        String recipientName = "Unknown Recipient";
+        if (_currentEmail.to.isNotEmpty) {
+          recipientName =
+              _currentEmail.to.first['displayName'] ??
+              _currentEmail.to.first['email'] ??
+              recipientName;
+        } else if (_currentEmail.cc?.isNotEmpty == true) {
+          recipientName =
+              _currentEmail.cc!.first['displayName'] ??
+              _currentEmail.cc!.first['email'] ??
+              recipientName;
+        } else if (_currentEmail.bcc?.isNotEmpty == true) {
+          recipientName =
+              _currentEmail.bcc!.first['displayName'] ??
+              _currentEmail.bcc!.first['email'] ??
+              recipientName;
+        }
+        nameToDisplay = 'To: $recipientName';
+        break;
+      case EmailFolder.drafts:
+        nameToDisplay = "Draft";
+        displayNameColor = AppColors.error;
+        break;
+      default:
+        nameToDisplay =
+            _currentEmail.from['displayName'] ?? _currentEmail.senderName;
+        if (_currentEmail.originalFolder == EmailFolder.drafts) {
+          nameToDisplay = "Draft";
+          displayNameColor = AppColors.error;
+        } else if (_currentEmail.originalFolder == EmailFolder.sent) {
+          String recipientName = "Unknown Recipient";
+          if (_currentEmail.to.isNotEmpty) {
+            recipientName =
+                _currentEmail.to.first['displayName'] ??
+                _currentEmail.to.first['email'] ??
+                recipientName;
+          }
+          nameToDisplay = 'To: $recipientName';
+        }
+        break;
     }
+    if (nameToDisplay.isEmpty) nameToDisplay = "Unknown";
 
     String initialLetter = "?";
-    if (nameToDisplay.isNotEmpty && nameToDisplay != "...") {
-      String namePartForInitial =
-          widget.isSentItem
-              ? nameToDisplay.replaceFirst('To: ', '')
-              : nameToDisplay;
-      if (namePartForInitial.isNotEmpty) {
-        initialLetter = namePartForInitial[0].toUpperCase();
-      }
+    if (_nameForAvatarAndInitial != null &&
+        _nameForAvatarAndInitial!.isNotEmpty &&
+        _nameForAvatarAndInitial != "Unknown Sender" &&
+        _nameForAvatarAndInitial != "Unknown Recipient" &&
+        _nameForAvatarAndInitial != "Unknown") {
+      initialLetter = _nameForAvatarAndInitial![0].toUpperCase();
+    } else if (nameToDisplay.isNotEmpty &&
+        nameToDisplay != "Unknown" &&
+        !nameToDisplay.startsWith("To:")) {
+      initialLetter = nameToDisplay[0].toUpperCase();
     }
 
     return InkWell(
@@ -293,39 +437,46 @@ class _EmailListItemState extends State<EmailListItem> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           builder:
-              (context) => SafeArea(
+              (bottomSheetContext) => SafeArea(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    ListTile(
-                      leading: Icon(
-                        _currentEmail.isRead
-                            ? Icons.drafts_outlined
-                            : Icons.mark_email_read_outlined,
-                        color:
-                            _currentEmail.isRead
-                                ? AppColors.primary
-                                : AppColors.secondaryIcon,
+                    if (widget.currentScreenFolder == EmailFolder.inbox ||
+                        (widget.currentScreenFolder == EmailFolder.trash &&
+                            _currentEmail.originalFolder == EmailFolder.inbox))
+                      ListTile(
+                        leading: Icon(
+                          _currentEmail.isRead
+                              ? Icons.mark_email_unread_outlined
+                              : Icons.mark_email_read_outlined,
+                          color:
+                              _currentEmail.isRead
+                                  ? AppColors.secondaryIcon
+                                  : AppColors.primary,
+                        ),
+                        title: Text(
+                          _currentEmail.isRead
+                              ? 'Mark as unread'
+                              : 'Mark as read',
+                        ),
+                        onTap: () async {
+                          Navigator.pop(bottomSheetContext);
+                          await _toggleReadStatus(bottomSheetContext);
+                        },
                       ),
-                      title: Text(
-                        _currentEmail.isRead
-                            ? 'Mark as unread'
-                            : 'Mark as read',
-                      ),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await _toggleReadStatus(context);
-                      },
-                    ),
                     ListTile(
                       leading: Icon(
                         Icons.delete_outline_rounded,
                         color: AppColors.error,
                       ),
-                      title: const Text('Delete'),
+                      title: Text(
+                        widget.currentScreenFolder == EmailFolder.trash
+                            ? 'Delete Permanently'
+                            : 'Delete',
+                      ),
                       onTap: () async {
-                        Navigator.pop(context);
-                        await _deleteEmail(context);
+                        Navigator.pop(bottomSheetContext);
+                        await _deleteEmail(bottomSheetContext);
                       },
                     ),
                   ],
@@ -337,7 +488,7 @@ class _EmailListItemState extends State<EmailListItem> {
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         decoration: BoxDecoration(
           color:
-              isUnread
+              (isUnread && !isActuallyDraftDisplay)
                   ? AppColors.primary.withOpacity(0.05)
                   : Colors.transparent,
           border: Border(
@@ -347,31 +498,44 @@ class _EmailListItemState extends State<EmailListItem> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              key: ValueKey<String?>(_photoUrl ?? nameToDisplay),
-              backgroundColor:
-                  isUnread
-                      ? AppColors.primary.withOpacity(0.15)
-                      : Colors.blueGrey[100],
-              backgroundImage:
-                  (_photoUrl != null && _photoUrl!.isNotEmpty)
-                      ? NetworkImage(_photoUrl!)
-                      : null,
-              child:
-                  (_photoUrl == null || _photoUrl!.isEmpty)
-                      ? Text(
-                        initialLetter,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color:
-                              isUnread
-                                  ? AppColors.primary
-                                  : AppColors.secondaryText,
-                        ),
-                      )
-                      : null,
-            ),
+            _isLoadingProfileInfo
+                ? CircleAvatar(
+                  backgroundColor: Colors.blueGrey[100],
+                  child: const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                )
+                : CircleAvatar(
+                  key: ValueKey<String?>(_photoUrl ?? _nameForAvatarAndInitial),
+                  backgroundColor:
+                      (isUnread && !isActuallyDraftDisplay)
+                          ? AppColors.primary.withOpacity(0.15)
+                          : Colors.blueGrey[100],
+                  backgroundImage:
+                      (_photoUrl != null && _photoUrl!.isNotEmpty)
+                          ? NetworkImage(_photoUrl!)
+                          : null,
+                  child:
+                      (_photoUrl == null || _photoUrl!.isEmpty)
+                          ? Text(
+                            initialLetter,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color:
+                                  (isUnread && !isActuallyDraftDisplay) ||
+                                          isActuallyDraftDisplay
+                                      ? AppColors.primary
+                                      : AppColors.secondaryText,
+                            ),
+                          )
+                          : null,
+                ),
             const SizedBox(width: 12.0),
             Expanded(
               child: Column(
@@ -382,9 +546,9 @@ class _EmailListItemState extends State<EmailListItem> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontWeight: itemFontWeight,
+                      fontWeight: displayNameFontWeight,
                       fontSize: 16,
-                      color: itemTextColor,
+                      color: displayNameColor,
                     ),
                   ),
                   const SizedBox(height: 2.0),
@@ -404,7 +568,7 @@ class _EmailListItemState extends State<EmailListItem> {
                   Text(
                     _currentEmail.previewText.isNotEmpty
                         ? _currentEmail.previewText.replaceAll('\n', ' ')
-                        : '(No preview content)',
+                        : '(No content)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 14, color: Colors.grey[600]),
@@ -421,11 +585,17 @@ class _EmailListItemState extends State<EmailListItem> {
                   _formatDateTime(_currentEmail.time),
                   style: TextStyle(
                     fontSize: 12,
-                    color: isUnread ? AppColors.primary : Colors.grey[700],
-                    fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                    color:
+                        (isUnread && !isActuallyDraftDisplay)
+                            ? AppColors.primary
+                            : Colors.grey[700],
+                    fontWeight:
+                        (isUnread && !isActuallyDraftDisplay)
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                   ),
                 ),
-                if (isUnread)
+                if (isUnread && !isActuallyDraftDisplay)
                   Container(
                     margin: const EdgeInsets.only(top: 6.0),
                     height: 8,
