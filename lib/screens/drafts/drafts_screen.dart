@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
 import 'package:email_application/models/email_folder.dart';
+import 'package:email_application/models/label_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/compose/compose_email_screen.dart';
@@ -17,48 +18,104 @@ class DraftsScreen extends StatefulWidget {
 }
 
 class _DraftsScreenState extends State<DraftsScreen> {
-  late Future<List<EmailData>> _emailsFuture;
   User? _currentUser;
+  Future<List<EmailData>>? _emailsFuture;
+  List<LabelData> _userLabels = [];
+  bool _isLoadingInitialData = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
-    _loadEmails();
+    _loadInitialScreenData();
   }
 
-  Future<void> _loadEmails() async {
-    if (_currentUser != null) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final authService = Provider.of<AuthService>(context);
+    final newUser = authService.currentUser;
+    if (newUser != _currentUser) {
+      _currentUser = newUser;
+      _loadInitialScreenData();
+    }
+  }
+
+  Future<void> _loadInitialScreenData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingInitialData = true;
+      _error = null;
+    });
+
+    if (_currentUser == null) {
       if (mounted) {
         setState(() {
-          _emailsFuture = _fetchEmails(
-            context,
-            _currentUser!.uid,
-            EmailFolder.drafts,
-          );
+          _isLoadingInitialData = false;
+          _emailsFuture = Future.value([]);
         });
       }
-    } else {
+      return;
+    }
+
+    try {
+      await _fetchUserLabels();
+      _loadEmails();
       if (mounted) {
         setState(() {
+          _isLoadingInitialData = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoadingInitialData = false;
           _emailsFuture = Future.value([]);
         });
       }
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final newUser = Provider.of<User?>(context);
-    if (newUser != _currentUser) {
-      _currentUser = newUser;
-      _loadEmails();
+  Future<void> _fetchUserLabels() async {
+    if (_currentUser == null || !mounted) {
+      if (mounted) _userLabels = [];
+      return;
+    }
+    try {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
+      final labels = await firestoreService.getLabelsForUser(_currentUser!.uid);
+      if (mounted) {
+        _userLabels = labels;
+      }
+    } catch (e) {
+      if (mounted) {
+        print("DraftsScreen: Error fetching labels: $e");
+      }
+      throw e;
     }
   }
 
-  Future<List<EmailData>> _fetchEmails(
-    BuildContext context,
+  Future<void> _loadEmails() async {
+    if (_currentUser != null && mounted) {
+      setState(() {
+        _emailsFuture = _fetchEmailsFromService(
+          _currentUser!.uid,
+          EmailFolder.drafts,
+        );
+      });
+    } else if (mounted) {
+      setState(() {
+        _emailsFuture = Future.value([]);
+      });
+    }
+  }
+
+  Future<List<EmailData>> _fetchEmailsFromService(
     String userId,
     EmailFolder folder,
   ) async {
@@ -76,20 +133,21 @@ class _DraftsScreenState extends State<DraftsScreen> {
         emailMap,
         emailMap['id'] as String? ?? '',
       );
-      return email.copyWith(senderEmail: userId, isRead: true);
+      return email.copyWith(isRead: true);
     }).toList();
   }
 
   Future<void> _handleDraftTap(EmailData draftEmail) async {
-    if (!mounted) return;
+    if (!mounted || _currentUser == null) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ComposeEmailScreen(draftToEdit: draftEmail),
       ),
     );
-    if (result == true || result == false && mounted) {
-      _loadEmails();
+    if (result == true || result == false || result == null && mounted) {
+      _loadInitialScreenData();
     }
   }
 
@@ -103,33 +161,61 @@ class _DraftsScreenState extends State<DraftsScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async => _loadEmails(),
+        onRefresh: _loadInitialScreenData,
         color: AppColors.primary,
-        child: FutureBuilder<List<EmailData>>(
-          future: _emailsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+        child: Builder(
+          builder: (context) {
+            if (_isLoadingInitialData && _emailsFuture == null) {
               return Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               );
             }
-
-            if (snapshot.hasError) {
-              print('DraftsScreen FutureBuilder Error: ${snapshot.error}');
+            if (_error != null && _emailsFuture == null) {
               return EmailListErrorView(
-                error: snapshot.error!,
-                onRetry: _loadEmails,
+                error: _error!,
+                onRetry: _loadInitialScreenData,
               );
             }
 
-            final emails = snapshot.data ?? [];
-            return EmailListView(
-              emails: emails,
-              currentScreenFolder: EmailFolder.drafts,
-              onEmailTap: _handleDraftTap,
-              onRefresh: _loadEmails,
-              onReadStatusChanged: null,
-              onDeleteOrMove: _loadEmails,
+            return FutureBuilder<List<EmailData>>(
+              future: _emailsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  );
+                }
+                if (snapshot.hasError) {
+                  print(
+                    'DraftsScreen Email FutureBuilder Error: ${snapshot.error}',
+                  );
+                  return EmailListErrorView(
+                    error: snapshot.error!,
+                    onRetry: _loadEmails,
+                  );
+                }
+                if (_error != null &&
+                    (snapshot.data == null || snapshot.data!.isEmpty)) {
+                  return EmailListErrorView(
+                    error: _error!,
+                    onRetry: _loadInitialScreenData,
+                  );
+                }
+
+                final emails = snapshot.data ?? [];
+                return EmailListView(
+                  emails: emails,
+                  currentScreenFolder: EmailFolder.drafts,
+                  allUserLabels: _userLabels,
+                  onEmailTap: _handleDraftTap,
+                  onRefresh: _loadInitialScreenData,
+                  onReadStatusChanged: null,
+                  onDeleteOrMove: _loadInitialScreenData,
+                  onStarStatusChanged: _loadInitialScreenData,
+                  emptyListMessage: "You have no saved drafts.",
+                  emptyListIcon: Icons.edit_note_outlined,
+                );
+              },
             );
           },
         ),

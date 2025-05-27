@@ -3,6 +3,7 @@ import 'package:email_application/models/email_data.dart';
 import 'package:email_application/models/email_folder.dart';
 import 'package:email_application/widgets/email_list_item.dart';
 import 'package:email_application/config/app_colors.dart';
+import 'package:email_application/models/label_data.dart';
 
 typedef EmailTapCallback = Future<void> Function(EmailData email);
 typedef VoidFutureCallBack = Future<void> Function();
@@ -18,12 +19,14 @@ class EmailListView extends StatelessWidget {
   final StarStatusChangedCallback? onStarStatusChanged;
   final String? emptyListMessage;
   final IconData? emptyListIcon;
+  final List<LabelData> allUserLabels;
 
   const EmailListView({
     super.key,
     required this.emails,
     required this.currentScreenFolder,
     required this.onEmailTap,
+    required this.allUserLabels,
     this.onRefresh,
     this.onReadStatusChanged,
     this.onDeleteOrMove,
@@ -93,6 +96,7 @@ class EmailListView extends StatelessWidget {
         return EmailListItem(
           email: email,
           currentScreenFolder: currentScreenFolder,
+          allUserLabels: allUserLabels,
           onTap: () => onEmailTap(email),
           onReadStatusChanged: onReadStatusChanged,
           onDeleteOrMove: onDeleteOrMove,

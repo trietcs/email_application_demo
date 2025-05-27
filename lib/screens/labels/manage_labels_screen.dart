@@ -3,10 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:email_application/models/label_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
-import 'package:email_application/config/app_colors.dart'; // Assuming AppColors.primary is defined
-
-// For a more advanced color picker, you might add a package like flutter_colorpicker
-// import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:email_application/config/app_colors.dart';
 
 class ManageLabelsScreen extends StatefulWidget {
   const ManageLabelsScreen({super.key});
@@ -22,7 +19,6 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
   bool _isLoading = true;
   String? _userId;
 
-  // Predefined colors for simplicity, or use a color picker
   final List<Color> _predefinedLabelColors = [
     Colors.red.shade300,
     Colors.orange.shade400,
@@ -76,13 +72,12 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
     );
     Color _selectedColor =
         existingLabel?.color ??
-        _predefinedLabelColors.first; // Default to first predefined color
+        _predefinedLabelColors.first;
     final _formKey = GlobalKey<FormState>();
 
     Color? pickedColor = await showDialog<Color?>(
       context: context,
       builder: (BuildContext context) {
-        // StatefulBuilder is used to update the color preview inside the dialog
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -180,7 +175,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                     if (_formKey.currentState!.validate()) {
                       Navigator.of(
                         context,
-                      ).pop(_selectedColor); // Pop with selected color
+                      ).pop(_selectedColor);
                     }
                   },
                 ),
@@ -193,7 +188,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
 
     if (pickedColor != null && _userId != null) {
       final String labelName = _labelNameController.text.trim();
-      setState(() => _isLoading = true); // Show loading indicator
+      setState(() => _isLoading = true);
       try {
         if (existingLabel == null) {
           await _firestoreService.createLabel(_userId!, labelName, pickedColor);
@@ -205,7 +200,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
             newColor: pickedColor,
           );
         }
-        await _fetchLabels(); // Refresh the list
+        await _fetchLabels();
       } catch (e) {
         print("Error saving label: $e");
         if (mounted) {
@@ -249,7 +244,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
       setState(() => _isLoading = true);
       try {
         await _firestoreService.deleteLabel(_userId!, label.id);
-        await _fetchLabels(); // Refresh the list
+        await _fetchLabels();
       } catch (e) {
         print("Error deleting label: $e");
         if (mounted) {
@@ -361,7 +356,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                               onTap:
                                   () => _showLabelDialog(
                                     existingLabel: label,
-                                  ), // Also allow edit on tap
+                                  ),
                             );
                           },
                         ),

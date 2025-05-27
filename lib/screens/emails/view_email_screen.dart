@@ -10,6 +10,7 @@ import 'package:email_application/config/app_colors.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:collection';
+import 'package:email_application/models/label_data.dart';
 
 class ViewEmailScreen extends StatefulWidget {
   final EmailData emailData;
@@ -35,6 +36,10 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     vertical: 4.0,
   );
   bool _starStatusChanged = false;
+  bool _labelsChanged = false;
+
+  List<LabelData> _userLabels = [];
+  bool _isLoadingLabels = false;
 
   @override
   void initState() {
@@ -45,6 +50,23 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     _currentUserId = authService.currentUser?.uid;
     _markEmailAsReadOnOpen();
     _fetchSenderProfile();
+    _fetchUserLabels();
+  }
+
+  Future<void> _fetchUserLabels() async {
+    if (_currentUserId == null) return;
+    if (mounted) setState(() => _isLoadingLabels = true);
+    try {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
+      _userLabels = await firestoreService.getLabelsForUser(_currentUserId!);
+    } catch (e) {
+      print("Error fetching user labels: $e");
+    } finally {
+      if (mounted) setState(() => _isLoadingLabels = false);
+    }
   }
 
   Future<void> _fetchSenderProfile() async {
@@ -153,28 +175,27 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
         Provider.of<AuthService>(context, listen: false).currentUser;
 
     if (currentUser == null) {
+      if (!mounted) return;
       scaffoldMessenger.showSnackBar(
         const SnackBar(content: Text('User not logged in.')),
       );
       return;
     }
-
     bool isPermanentDelete = _currentEmailData.folder == EmailFolder.trash;
-    String dialogTitle =
-        isPermanentDelete ? 'Confirm Permanent Deletion' : 'Confirm Deletion';
-    String dialogContent =
-        isPermanentDelete
-            ? 'Are you sure you want to permanently delete this email?'
-            : 'Are you sure you want to move this email to the trash?';
-    String confirmButtonText =
-        isPermanentDelete ? 'Delete Permanently' : 'Move to Trash';
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: Text(dialogTitle),
-          content: Text(dialogContent),
+          title: Text(
+            isPermanentDelete
+                ? 'Confirm Permanent Deletion'
+                : 'Confirm Deletion',
+          ),
+          content: Text(
+            isPermanentDelete
+                ? 'Are you sure you want to permanently delete this email?'
+                : 'Are you sure you want to move this email to the trash?',
+          ),
           actions: <Widget>[
             TextButton(
               child: const Text('Cancel'),
@@ -182,7 +203,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
             ),
             TextButton(
               child: Text(
-                confirmButtonText,
+                isPermanentDelete ? 'Delete Permanently' : 'Move to Trash',
                 style: TextStyle(color: AppColors.error),
               ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
@@ -194,15 +215,11 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
 
     if (confirmed != true || !mounted) return;
     setState(() => _isProcessingAction = true);
-
     try {
       if (isPermanentDelete) {
         await firestoreService.deleteEmailPermanently(
           userId: currentUser.uid,
           emailId: _currentEmailData.id,
-        );
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Email permanently deleted')),
         );
       } else {
         await firestoreService.deleteEmail(
@@ -211,17 +228,23 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
           currentFolder: _currentEmailData.folder,
           targetFolder: EmailFolder.trash,
         );
-        scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('Email moved to trash')),
-        );
       }
-      if (mounted) Navigator.pop(context, true);
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            isPermanentDelete
+                ? 'Email permanently deleted'
+                : 'Email moved to trash',
+          ),
+        ),
+      );
+      Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),
         );
-      }
     } finally {
       if (mounted) setState(() => _isProcessingAction = false);
     }
@@ -296,7 +319,6 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
       context,
       listen: false,
     );
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (user != null) {
       final newIsStarredState = !_currentEmailData.isStarred;
@@ -306,30 +328,27 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
           emailId: _currentEmailData.id,
           newIsStarredState: newIsStarredState,
         );
-        if (mounted) {
-          setState(() {
-            _currentEmailData = _currentEmailData.copyWith(
-              isStarred: newIsStarredState,
-            );
-            _starStatusChanged = true;
-          });
-        }
+        if (!mounted) return;
+        setState(() {
+          _currentEmailData = _currentEmailData.copyWith(
+            isStarred: newIsStarredState,
+          );
+          _starStatusChanged = true;
+        });
       } catch (e) {
-        if (mounted) {
-          scaffoldMessenger.showSnackBar(
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error updating star status: $e')),
           );
-        }
       } finally {
         if (mounted) setState(() => _isProcessingAction = false);
       }
     } else {
-      if (mounted) {
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('User not found.')),
-        );
-        setState(() => _isProcessingAction = false);
-      }
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('User not found.')));
+      if (mounted) setState(() => _isProcessingAction = false);
     }
   }
 
@@ -625,6 +644,175 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     }
   }
 
+  Future<void> _showManageLabelsDialog() async {
+    if (_currentUserId == null || !mounted) return;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(this.context);
+    final firestoreService = Provider.of<FirestoreService>(
+      this.context,
+      listen: false,
+    );
+    final String currentUserIdForDialog = _currentUserId!;
+    final String currentEmailIdForDialog = _currentEmailData.id;
+
+    if (_isLoadingLabels) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text("Labels are loading, please wait...")),
+      );
+      return;
+    }
+
+    List<String> selectedLabelIds = List<String>.from(
+      _currentEmailData.labelIds,
+    );
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Manage Labels'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child:
+                    _userLabels.isEmpty
+                        ? const Text(
+                          "No labels created yet. You can create them in 'Manage Labels' screen.",
+                        )
+                        : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _userLabels.length,
+                          itemBuilder: (lbContext, index) {
+                            final label = _userLabels[index];
+                            final bool isSelected = selectedLabelIds.contains(
+                              label.id,
+                            );
+                            return CheckboxListTile(
+                              title: Text(label.name),
+                              value: isSelected,
+                              onChanged: (bool? value) {
+                                setDialogState(() {
+                                  if (value == true) {
+                                    if (!isSelected)
+                                      selectedLabelIds.add(label.id);
+                                  } else {
+                                    selectedLabelIds.remove(label.id);
+                                  }
+                                });
+                              },
+                              secondary: Icon(Icons.label, color: label.color),
+                              controlAffinity: ListTileControlAffinity.leading,
+                            );
+                          },
+                        ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  child: Text(
+                    'Save',
+                    style: TextStyle(color: AppColors.onPrimary),
+                  ),
+                  onPressed: () async {
+                    Navigator.of(dialogContext).pop();
+
+                    if (!mounted) return;
+
+                    setState(() => _isProcessingAction = true);
+                    try {
+                      await firestoreService.updateEmailLabels(
+                        currentUserIdForDialog,
+                        currentEmailIdForDialog,
+                        selectedLabelIds,
+                      );
+                      if (!mounted) return;
+                      setState(() {
+                        _currentEmailData = _currentEmailData.copyWith(
+                          labelIds: selectedLabelIds,
+                        );
+                        _labelsChanged = true;
+                      });
+                      scaffoldMessenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Labels updated successfully!'),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      scaffoldMessenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Error updating labels: ${e.toString()}',
+                          ),
+                        ),
+                      );
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isProcessingAction = false);
+                      }
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAppliedLabels() {
+    if (_currentEmailData.labelIds.isEmpty || _userLabels.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    List<Widget> labelChips = [];
+    for (String labelId in _currentEmailData.labelIds) {
+      final labelData = _userLabels.firstWhere(
+        (l) => l.id == labelId,
+        orElse: () => LabelData(id: '', name: 'Unknown', color: Colors.grey),
+      );
+      if (labelData.name != 'Unknown') {
+        labelChips.add(
+          Padding(
+            padding: const EdgeInsets.only(right: 6.0, top: 4.0),
+            child: Chip(
+              label: Text(labelData.name, style: const TextStyle(fontSize: 11)),
+              backgroundColor: labelData.color.withOpacity(0.2),
+              avatar: CircleAvatar(backgroundColor: labelData.color, radius: 6),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 2.0,
+              ),
+              labelStyle: TextStyle(
+                color:
+                    labelData.color.computeLuminance() > 0.5
+                        ? Colors.black87
+                        : Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: labelData.color.withOpacity(0.5)),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    if (labelChips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Wrap(children: labelChips),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     String headerDisplayName;
@@ -690,6 +878,11 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
               )
             else ...[
               IconButton(
+                icon: const Icon(Icons.label_outline_rounded),
+                tooltip: 'Manage Labels',
+                onPressed: _showManageLabelsDialog,
+              ),
+              IconButton(
                 icon: Icon(
                   _currentEmailData.isStarred ? Icons.star : Icons.star_border,
                   color:
@@ -727,6 +920,9 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildAppliedLabels(),
+              const SizedBox(height: 4),
+
               Text(
                 _currentEmailData.subject.isNotEmpty
                     ? _currentEmailData.subject

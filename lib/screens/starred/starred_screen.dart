@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
 import 'package:email_application/models/email_folder.dart';
+import 'package:email_application/models/label_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/emails/view_email_screen.dart';
 import 'package:email_application/widgets/email_list_item.dart';
-import 'package:email_application/widgets/email_list_view.dart'; // For EmailListErrorView
+import 'package:email_application/widgets/email_list_view.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:email_application/config/app_colors.dart';
 
@@ -20,14 +21,15 @@ class StarredScreen extends StatefulWidget {
 class _StarredScreenState extends State<StarredScreen> {
   User? _currentUser;
   bool _isLoading = true;
-  List<EmailData> _starredEmails = []; // Now directly a list of EmailData
+  List<EmailData> _starredEmails = [];
+  List<LabelData> _userLabels = [];
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
-    _loadStarredEmails();
+    _loadInitialData();
   }
 
   @override
@@ -38,27 +40,66 @@ class _StarredScreenState extends State<StarredScreen> {
 
     if (newUser != _currentUser) {
       _currentUser = newUser;
-      _loadStarredEmails();
+      _loadInitialData();
     }
   }
 
-  Future<void> _loadStarredEmails() async {
+  Future<void> _loadInitialData() async {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
-      _starredEmails = [];
     });
 
     if (_currentUser == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      await _fetchUserLabels();
+      await _loadStarredEmails();
+
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchUserLabels() async {
+    if (_currentUser == null || !mounted) return;
+    try {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
+      final labels = await firestoreService.getLabelsForUser(_currentUser!.uid);
+      if (mounted) {
+        _userLabels = labels;
+      }
+    } catch (e) {
+      if (mounted) {
+        print("StarredScreen: Error fetching labels: $e");
+        _error = "Failed to load labels: ${e.toString()}";
+      }
+      throw e;
+    }
+  }
+
+  Future<void> _loadStarredEmails() async {
+    if (_currentUser == null || !mounted) {
+      if (mounted) _starredEmails = [];
       return;
     }
-
     try {
       final firestoreService = Provider.of<FirestoreService>(
         context,
@@ -74,23 +115,15 @@ class _StarredScreenState extends State<StarredScreen> {
             return EmailData.fromMap(rawEmail, rawEmail['id'] as String? ?? '');
           }).toList();
 
-      // Sort emails by time, most recent first (already done by Firestore query, but can be re-asserted here if needed)
-      // loadedEmails.sort((a, b) => DateTime.parse(b.time).compareTo(DateTime.parse(a.time)));
-
       if (mounted) {
-        setState(() {
-          _starredEmails = loadedEmails;
-          _isLoading = false;
-        });
+        _starredEmails = loadedEmails;
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
         print('StarredScreen _loadStarredEmails Error: $e');
+        _error = "Failed to load emails: ${e.toString()}";
       }
+      throw e;
     }
   }
 
@@ -105,7 +138,7 @@ class _StarredScreenState extends State<StarredScreen> {
     );
 
     if (resultFromView == true) {
-      _loadStarredEmails();
+      _loadInitialData();
     } else {
       final firestoreService = Provider.of<FirestoreService>(
         context,
@@ -120,13 +153,13 @@ class _StarredScreenState extends State<StarredScreen> {
                 .get();
         if (mounted) {
           if (!doc.exists || !(doc.data()?['isStarred'] ?? false)) {
-            _loadStarredEmails();
+            _loadInitialData();
           }
         }
       } catch (e) {
         print("Error checking email status after pop from ViewEmailScreen: $e");
         if (mounted) {
-          _loadStarredEmails();
+          _loadInitialData();
         }
       }
     }
@@ -142,7 +175,7 @@ class _StarredScreenState extends State<StarredScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _loadStarredEmails,
+        onRefresh: _loadInitialData,
         color: AppColors.primary,
         child: Builder(
           builder: (context) {
@@ -155,7 +188,7 @@ class _StarredScreenState extends State<StarredScreen> {
             if (_error != null) {
               return EmailListErrorView(
                 error: _error!,
-                onRetry: _loadStarredEmails,
+                onRetry: _loadInitialData,
               );
             }
 
@@ -195,12 +228,12 @@ class _StarredScreenState extends State<StarredScreen> {
                 final email = _starredEmails[index];
                 return EmailListItem(
                   email: email,
-                  currentScreenFolder:
-                      email.folder, // Use the email's actual folder for context
+                  currentScreenFolder: email.folder,
+                  allUserLabels: _userLabels,
                   onTap: () => _handleEmailTap(email),
-                  onReadStatusChanged: _loadStarredEmails,
-                  onDeleteOrMove: _loadStarredEmails,
-                  onStarStatusChanged: _loadStarredEmails,
+                  onReadStatusChanged: _loadInitialData,
+                  onDeleteOrMove: _loadInitialData,
+                  onStarStatusChanged: _loadInitialData,
                 );
               },
             );

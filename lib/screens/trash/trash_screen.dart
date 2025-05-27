@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
 import 'package:email_application/models/email_folder.dart';
+import 'package:email_application/models/label_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/compose/compose_email_screen.dart';
@@ -18,48 +19,104 @@ class TrashScreen extends StatefulWidget {
 }
 
 class _TrashScreenState extends State<TrashScreen> {
-  late Future<List<EmailData>> _emailsFuture;
   User? _currentUser;
+  Future<List<EmailData>>? _emailsFuture;
+  List<LabelData> _userLabels = [];
+  bool _isLoadingInitialData = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
-    _loadEmails();
+    _loadInitialScreenData();
   }
 
-  Future<void> _loadEmails() async {
-    if (_currentUser != null) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final authService = Provider.of<AuthService>(context);
+    final newUser = authService.currentUser;
+    if (newUser != _currentUser) {
+      _currentUser = newUser;
+      _loadInitialScreenData();
+    }
+  }
+
+  Future<void> _loadInitialScreenData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingInitialData = true;
+      _error = null;
+    });
+
+    if (_currentUser == null) {
       if (mounted) {
         setState(() {
-          _emailsFuture = _fetchEmails(
-            context,
-            _currentUser!.uid,
-            EmailFolder.trash,
-          );
+          _isLoadingInitialData = false;
+          _emailsFuture = Future.value([]);
         });
       }
-    } else {
+      return;
+    }
+
+    try {
+      await _fetchUserLabels();
+      _loadEmails();
       if (mounted) {
         setState(() {
+          _isLoadingInitialData = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoadingInitialData = false;
           _emailsFuture = Future.value([]);
         });
       }
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final newUser = Provider.of<User?>(context);
-    if (newUser != _currentUser) {
-      _currentUser = newUser;
-      _loadEmails();
+  Future<void> _fetchUserLabels() async {
+    if (_currentUser == null || !mounted) {
+      if (mounted) _userLabels = [];
+      return;
+    }
+    try {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
+      final labels = await firestoreService.getLabelsForUser(_currentUser!.uid);
+      if (mounted) {
+        _userLabels = labels;
+      }
+    } catch (e) {
+      if (mounted) {
+        print("TrashScreen: Error fetching labels: $e");
+      }
+      throw e;
     }
   }
 
-  Future<List<EmailData>> _fetchEmails(
-    BuildContext context,
+  Future<void> _loadEmails() async {
+    if (_currentUser != null && mounted) {
+      setState(() {
+        _emailsFuture = _fetchEmailsFromService(
+          _currentUser!.uid,
+          EmailFolder.trash,
+        );
+      });
+    } else if (mounted) {
+      setState(() {
+        _emailsFuture = Future.value([]);
+      });
+    }
+  }
+
+  Future<List<EmailData>> _fetchEmailsFromService(
     String userId,
     EmailFolder folder,
   ) async {
@@ -81,9 +138,12 @@ class _TrashScreenState extends State<TrashScreen> {
   Future<void> _handleEmailTap(EmailData email) async {
     if (_currentUser == null || !mounted) return;
 
-    if (email.originalFolder == EmailFolder.drafts ||
-        email.folder == EmailFolder.drafts) {
-      final resultFromCompose = await Navigator.push(
+    final bool wasOriginallyDraft = email.originalFolder == EmailFolder.drafts;
+
+    dynamic resultFromNextScreen;
+
+    if (wasOriginallyDraft) {
+      resultFromNextScreen = await Navigator.push(
         context,
         MaterialPageRoute(
           builder:
@@ -92,21 +152,19 @@ class _TrashScreenState extends State<TrashScreen> {
               ),
         ),
       );
-      if (resultFromCompose == true ||
-          (resultFromCompose == false && mounted) ||
-          resultFromCompose != null) {
-        _loadEmails();
-      }
     } else {
-      final resultFromView = await Navigator.push(
+      resultFromNextScreen = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ViewEmailScreen(emailData: email),
         ),
       );
-      if (resultFromView == true) {
-        _loadEmails();
-      }
+    }
+
+    if (resultFromNextScreen == true ||
+        resultFromNextScreen == false ||
+        resultFromNextScreen == null && mounted) {
+      _loadInitialScreenData();
     }
   }
 
@@ -119,31 +177,61 @@ class _TrashScreenState extends State<TrashScreen> {
     }
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async => _loadEmails(),
+        onRefresh: _loadInitialScreenData,
         color: AppColors.primary,
-        child: FutureBuilder<List<EmailData>>(
-          future: _emailsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+        child: Builder(
+          builder: (context) {
+            if (_isLoadingInitialData && _emailsFuture == null) {
               return Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               );
             }
-            if (snapshot.hasError) {
-              print('TrashScreen FutureBuilder Error: ${snapshot.error}');
+            if (_error != null && _emailsFuture == null) {
               return EmailListErrorView(
-                error: snapshot.error!,
-                onRetry: _loadEmails,
+                error: _error!,
+                onRetry: _loadInitialScreenData,
               );
             }
-            final emails = snapshot.data ?? [];
-            return EmailListView(
-              emails: emails,
-              currentScreenFolder: EmailFolder.trash,
-              onEmailTap: _handleEmailTap,
-              onRefresh: _loadEmails,
-              onReadStatusChanged: _loadEmails,
-              onDeleteOrMove: _loadEmails,
+
+            return FutureBuilder<List<EmailData>>(
+              future: _emailsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  );
+                }
+                if (snapshot.hasError) {
+                  print(
+                    'TrashScreen Email FutureBuilder Error: ${snapshot.error}',
+                  );
+                  return EmailListErrorView(
+                    error: snapshot.error!,
+                    onRetry: _loadEmails,
+                  );
+                }
+                if (_error != null &&
+                    (snapshot.data == null || snapshot.data!.isEmpty)) {
+                  return EmailListErrorView(
+                    error: _error!,
+                    onRetry: _loadInitialScreenData,
+                  );
+                }
+
+                final emails = snapshot.data ?? [];
+                return EmailListView(
+                  emails: emails,
+                  currentScreenFolder: EmailFolder.trash,
+                  allUserLabels: _userLabels,
+                  onEmailTap: _handleEmailTap,
+                  onRefresh: _loadInitialScreenData,
+                  onReadStatusChanged: _loadInitialScreenData,
+                  onDeleteOrMove: _loadInitialScreenData,
+                  onStarStatusChanged: _loadInitialScreenData,
+                  emptyListMessage: "No emails in your trash.",
+                  emptyListIcon: Icons.delete_sweep_outlined,
+                );
+              },
             );
           },
         ),

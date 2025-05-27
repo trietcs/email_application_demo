@@ -1,3 +1,4 @@
+import 'package:email_application/config/app_colors.dart';
 import 'package:email_application/firebase_options.dart';
 import 'package:email_application/screens/auth/forgot_password_screen.dart';
 import 'package:email_application/screens/auth/login_screen.dart';
@@ -40,9 +41,43 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'TVA Email',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
-        useMaterial3: true,
+        primaryColor: AppColors.primary,
+        scaffoldBackgroundColor: AppColors.background,
+
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.appBarBackground,
+          foregroundColor: AppColors.appBarForeground,
+          iconTheme: IconThemeData(color: AppColors.primary),
+        ),
+
+        iconTheme: const IconThemeData(color: AppColors.primary),
+
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+        ),
+
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.onPrimary,
+          ),
+        ),
+
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.onPrimary,
+        ),
+
+        colorScheme: ColorScheme.fromSwatch().copyWith(
+          primary: AppColors.primary,
+          secondary: AppColors.accent,
+          error: AppColors.error,
+        ),
+
+        dividerTheme: const DividerThemeData(
+          color: AppColors.secondaryIcon,
+          thickness: 1,
+        ),
       ),
 
       localizationsDelegates: const [
