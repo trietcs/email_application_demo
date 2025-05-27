@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:email_application/models/email_folder.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:email_application/models/label_data.dart';
+import 'package:flutter/material.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -57,6 +59,7 @@ class FirestoreService {
         'dateOfBirth': dobTimestamp,
         'photoURL': photoURL,
         'createdAt': FieldValue.serverTimestamp(),
+        'lastLogin': FieldValue.serverTimestamp(),
       };
 
       if (isProfileFullyCompleted) {
@@ -218,7 +221,7 @@ class FirestoreService {
   }
 
   Future<void> sendEmail({
-    required String senderId, // UID
+    required String senderId,
     required String senderDisplayName,
     required List<Map<String, String>> to,
     List<Map<String, String>>? cc,
@@ -229,7 +232,6 @@ class FirestoreService {
   }) async {
     try {
       final Timestamp now = Timestamp.now();
-
       final senderProfile = await getUserProfile(senderId);
       final senderActualEmail =
           senderProfile?['customEmail'] ?? 'unknown_sender@tvamail.com';
@@ -251,6 +253,7 @@ class FirestoreService {
         'isRead': true,
         'isStarred': false,
         'attachments': attachments ?? [],
+        'labelIds': [],
       };
       await usersCollection
           .doc(senderId)
@@ -465,6 +468,7 @@ class FirestoreService {
         'isRead': true,
         'isStarred': false,
         'attachments': attachments ?? [],
+        'labelIds': [],
       };
       final docRef = await usersCollection
           .doc(userId)
@@ -542,6 +546,183 @@ class FirestoreService {
     } catch (e) {
       print('Error permanently deleting email $emailId: $e');
       throw e;
+    }
+  }
+
+  Future<String> createLabel(String userId, String name, Color color) async {
+    try {
+      final newLabel = LabelData(id: '', name: name, color: color);
+      final docRef = await usersCollection
+          .doc(userId)
+          .collection('labels')
+          .add(newLabel.toMap());
+      print(
+        'FirestoreService: Label "$name" created for user $userId with ID ${docRef.id}',
+      );
+      return docRef.id;
+    } catch (e) {
+      print('Error creating label for user $userId: $e');
+      throw e;
+    }
+  }
+
+  Future<void> updateLabel(
+    String userId,
+    String labelId, {
+    String? newName,
+    Color? newColor,
+  }) async {
+    try {
+      Map<String, dynamic> dataToUpdate = {};
+      if (newName != null) dataToUpdate['name'] = newName;
+      if (newColor != null)
+        dataToUpdate['color'] = LabelData.colorToHex(newColor);
+
+      if (dataToUpdate.isNotEmpty) {
+        await usersCollection
+            .doc(userId)
+            .collection('labels')
+            .doc(labelId)
+            .update(dataToUpdate);
+        print('FirestoreService: Label $labelId updated for user $userId.');
+      }
+    } catch (e) {
+      print('Error updating label $labelId for user $userId: $e');
+      throw e;
+    }
+  }
+
+  Future<void> deleteLabel(String userId, String labelId) async {
+    try {
+      await usersCollection
+          .doc(userId)
+          .collection('labels')
+          .doc(labelId)
+          .delete();
+      print('FirestoreService: Label $labelId deleted for user $userId.');
+
+      final WriteBatch batch = _db.batch();
+      final emailsQuery = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .where('labelIds', arrayContains: labelId);
+
+      final snapshot = await emailsQuery.get();
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          'labelIds': FieldValue.arrayRemove([labelId]),
+        });
+      }
+      await batch.commit();
+      print(
+        'FirestoreService: Removed labelId $labelId from ${snapshot.size} emails for user $userId.',
+      );
+    } catch (e) {
+      print('Error deleting label $labelId for user $userId: $e');
+      throw e;
+    }
+  }
+
+  Future<List<LabelData>> getLabelsForUser(String userId) async {
+    try {
+      final snapshot =
+          await usersCollection
+              .doc(userId)
+              .collection('labels')
+              .orderBy('name')
+              .get();
+      return snapshot.docs.map((doc) {
+        return LabelData.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      }).toList();
+    } catch (e) {
+      print('Error fetching labels for user $userId: $e');
+      return [];
+    }
+  }
+
+  Future<void> addLabelToEmail(
+    String userId,
+    String emailId,
+    String labelId,
+  ) async {
+    try {
+      await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId)
+          .update({
+            'labelIds': FieldValue.arrayUnion([labelId]),
+          });
+      print(
+        'FirestoreService: Added label $labelId to email $emailId for user $userId.',
+      );
+    } catch (e) {
+      print('Error adding label $labelId to email $emailId: $e');
+      throw e;
+    }
+  }
+
+  Future<void> removeLabelFromEmail(
+    String userId,
+    String emailId,
+    String labelId,
+  ) async {
+    try {
+      await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId)
+          .update({
+            'labelIds': FieldValue.arrayRemove([labelId]),
+          });
+      print(
+        'FirestoreService: Removed label $labelId from email $emailId for user $userId.',
+      );
+    } catch (e) {
+      print('Error removing label $labelId from email $emailId: $e');
+      throw e;
+    }
+  }
+
+  Future<void> updateEmailLabels(
+    String userId,
+    String emailId,
+    List<String> labelIds,
+  ) async {
+    try {
+      await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId)
+          .update({'labelIds': labelIds});
+      print(
+        'FirestoreService: Updated labels for email $emailId for user $userId.',
+      );
+    } catch (e) {
+      print('Error updating labels for email $emailId: $e');
+      throw e;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getEmailsByLabel(
+    String userId,
+    String labelId,
+  ) async {
+    try {
+      final query = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .where('labelIds', arrayContains: labelId)
+          .orderBy('timestamp', descending: true);
+
+      final snapshot = await query.get();
+      return snapshot.docs.map<Map<String, dynamic>>((doc) {
+        final data = doc.data();
+        return {...data, 'id': doc.id};
+      }).toList();
+    } catch (e) {
+      print('Error getting emails by label $labelId for user $userId: $e');
+      return [];
     }
   }
 }

@@ -10,6 +10,7 @@ class EmailData {
   final String time;
   bool isRead;
   final bool isStarred;
+  final List<String> labelIds;
 
   final List<Map<String, String>> to;
   final List<Map<String, String>>? cc;
@@ -28,13 +29,14 @@ class EmailData {
     required this.time,
     required this.isRead,
     this.isStarred = false,
+    List<String>? labelIds,
     required this.to,
     this.cc,
     this.bcc,
     required this.folder,
     this.originalFolder,
     this.attachments,
-  });
+  }) : this.labelIds = labelIds ?? [];
 
   String get senderName => from['displayName'] ?? 'Unknown Sender';
   String get senderUid => from['userId'] ?? '';
@@ -104,6 +106,7 @@ class EmailData {
                   : DateTime.now().toIso8601String()),
       isRead: map['isRead'] as bool? ?? false,
       isStarred: map['isStarred'] as bool? ?? false,
+      labelIds: List<String>.from(map['labelIds'] as List<dynamic>? ?? []),
       to: parseRecipientList(map['to']),
       cc: parseRecipientList(map['cc']),
       bcc: parseRecipientList(map['bcc']),
@@ -132,6 +135,7 @@ class EmailData {
       'timestamp': FieldValue.serverTimestamp(),
       'isRead': isRead,
       'isStarred': isStarred,
+      'labelIds': labelIds,
       'to': to,
       'cc': cc,
       'bcc': bcc,
@@ -150,6 +154,7 @@ class EmailData {
     String? time,
     bool? isRead,
     bool? isStarred,
+    List<String>? labelIds,
     List<Map<String, String>>? to,
     List<Map<String, String>>? cc,
     List<Map<String, String>>? bcc,
@@ -182,6 +187,7 @@ class EmailData {
       time: time ?? this.time,
       isRead: isRead ?? this.isRead,
       isStarred: isStarred ?? this.isStarred,
+      labelIds: labelIds ?? this.labelIds,
       to: to ?? this.to,
       cc: cc ?? this.cc,
       bcc: bcc ?? this.bcc,
