@@ -3,14 +3,13 @@ import 'package:email_application/models/email_folder.dart';
 
 class EmailData {
   final String id;
-
   final Map<String, String?> from;
-
   final String subject;
   final String previewText;
   final String body;
   final String time;
   bool isRead;
+  final bool isStarred;
 
   final List<Map<String, String>> to;
   final List<Map<String, String>>? cc;
@@ -28,6 +27,7 @@ class EmailData {
     required this.body,
     required this.time,
     required this.isRead,
+    this.isStarred = false,
     required this.to,
     this.cc,
     this.bcc,
@@ -103,6 +103,7 @@ class EmailData {
                   ? map['timestamp'] as String
                   : DateTime.now().toIso8601String()),
       isRead: map['isRead'] as bool? ?? false,
+      isStarred: map['isStarred'] as bool? ?? false,
       to: parseRecipientList(map['to']),
       cc: parseRecipientList(map['cc']),
       bcc: parseRecipientList(map['bcc']),
@@ -130,6 +131,7 @@ class EmailData {
       'body': body,
       'timestamp': FieldValue.serverTimestamp(),
       'isRead': isRead,
+      'isStarred': isStarred,
       'to': to,
       'cc': cc,
       'bcc': bcc,
@@ -147,6 +149,7 @@ class EmailData {
     String? body,
     String? time,
     bool? isRead,
+    bool? isStarred,
     List<Map<String, String>>? to,
     List<Map<String, String>>? cc,
     List<Map<String, String>>? bcc,
@@ -178,6 +181,7 @@ class EmailData {
       body: body ?? this.body,
       time: time ?? this.time,
       isRead: isRead ?? this.isRead,
+      isStarred: isStarred ?? this.isStarred,
       to: to ?? this.to,
       cc: cc ?? this.cc,
       bcc: bcc ?? this.bcc,

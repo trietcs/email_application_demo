@@ -200,11 +200,7 @@ class FirestoreService {
           .collection('userEmails')
           .where('folder', isEqualTo: folder.folderName);
 
-      if (folder == EmailFolder.trash) {
-        query = query.orderBy('timestamp', descending: true);
-      } else {
-        query = query.orderBy('timestamp', descending: true);
-      }
+      query = query.orderBy('timestamp', descending: true);
 
       final snapshot = await query.get();
       return snapshot.docs.map<Map<String, dynamic>>((doc) {
@@ -267,6 +263,7 @@ class FirestoreService {
         'originalFolder': EmailFolder.inbox.folderName,
         'isRead': false,
       };
+
       final emailDataForToCcRecipients = Map<String, dynamic>.from(
         emailDataForRecipient,
       )..remove('bcc');
@@ -330,6 +327,64 @@ class FirestoreService {
     }
   }
 
+  Future<void> toggleStarStatus({
+    required String userId,
+    required String emailId,
+    required bool newIsStarredState,
+  }) async {
+    try {
+      await usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .doc(emailId)
+          .update({'isStarred': newIsStarredState});
+      print(
+        'FirestoreService: Toggled star status for email $emailId for user $userId to $newIsStarredState',
+      );
+    } catch (e) {
+      print('Error toggling star status for $emailId: $e');
+      throw e;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getStarredEmails(String userId) async {
+    try {
+      final query = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .where('isStarred', isEqualTo: true)
+          .orderBy('timestamp', descending: true);
+
+      print(
+        'FirestoreService: Executing query for starred emails for user $userId...',
+      );
+      final snapshot = await query.get();
+
+      print(
+        'FirestoreService: Starred emails query snapshot size: ${snapshot.size}',
+      );
+      if (snapshot.size > 0) {
+        snapshot.docs.forEach((doc) {
+          print(
+            'FirestoreService: Starred Doc ID: ${doc.id}, Data: ${doc.data()}',
+          );
+        });
+      }
+
+      return snapshot.docs.map<Map<String, dynamic>>((doc) {
+        final data = doc.data();
+        if (data is Map<String, dynamic>) {
+          return {...data, 'id': doc.id};
+        } else {
+          return {'id': doc.id};
+        }
+      }).toList();
+    } catch (e) {
+      print('Error getting starred emails for user $userId: $e');
+      return [];
+    }
+  }
+
   Future<void> deleteEmail({
     required String userId,
     required String emailId,
@@ -344,26 +399,36 @@ class FirestoreService {
       final emailDoc = await emailRef.get();
 
       if (!emailDoc.exists) {
-        print("Email $emailId does not exist for user $userId.");
+        print("Email $emailId does not exist for user $userId to delete/move.");
         return;
       }
+
+      final String actualCurrentFolderFromDoc =
+          (emailDoc.data() as Map<String, dynamic>?)?['folder'] ??
+          currentFolder.folderName;
 
       if (targetFolder == EmailFolder.trash) {
         await emailRef.update({
           'folder': EmailFolder.trash.folderName,
-          'originalFolder': currentFolder.folderName,
+          'originalFolder': actualCurrentFolderFromDoc,
+          'timestamp':
+              emailDoc.data()?['timestamp'] ?? FieldValue.serverTimestamp(),
         });
         print(
-          'FirestoreService: Email $emailId moved to trash for user $userId from ${currentFolder.folderName}. Timestamp preserved.',
+          'FirestoreService: Email $emailId moved to trash for user $userId from $actualCurrentFolderFromDoc.',
         );
       } else {
-        await emailRef.update({'folder': targetFolder.folderName});
+        await emailRef.update({
+          'folder': targetFolder.folderName,
+          'timestamp':
+              emailDoc.data()?['timestamp'] ?? FieldValue.serverTimestamp(),
+        });
         print(
-          'FirestoreService: Email $emailId moved to folder ${targetFolder.folderName} for user $userId. Timestamp preserved.',
+          'FirestoreService: Email $emailId moved to folder ${targetFolder.folderName} for user $userId.',
         );
       }
     } catch (e) {
-      print('Error deleting/moving email: $e');
+      print('Error deleting/moving email $emailId: $e');
       throw e;
     }
   }
@@ -435,7 +500,8 @@ class FirestoreService {
           .doc(userId)
           .collection('userEmails')
           .doc(draftId);
-      await draftRef.update({
+
+      Map<String, dynamic> dataToUpdate = {
         'from': {
           'userId': userId,
           'displayName': senderDisplayName,
@@ -448,12 +514,14 @@ class FirestoreService {
         'body': body,
         'timestamp': FieldValue.serverTimestamp(),
         'attachments': attachments ?? [],
-      });
+      };
+
+      await draftRef.update(dataToUpdate);
       print(
         'FirestoreService: Draft updated successfully for user $userId with ID $draftId',
       );
     } catch (e) {
-      print('Error updating draft: $e');
+      print('Error updating draft $draftId: $e');
       throw e;
     }
   }
@@ -472,7 +540,7 @@ class FirestoreService {
         'FirestoreService: Permanently deleted email $emailId for user $userId',
       );
     } catch (e) {
-      print('Error permanently deleting email: $e');
+      print('Error permanently deleting email $emailId: $e');
       throw e;
     }
   }

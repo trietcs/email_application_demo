@@ -6,6 +6,7 @@ import 'package:email_application/config/app_colors.dart';
 
 typedef EmailTapCallback = Future<void> Function(EmailData email);
 typedef VoidFutureCallBack = Future<void> Function();
+typedef StarStatusChangedCallback = void Function();
 
 class EmailListView extends StatelessWidget {
   final List<EmailData> emails;
@@ -14,6 +15,9 @@ class EmailListView extends StatelessWidget {
   final VoidFutureCallBack? onRefresh;
   final VoidCallback? onReadStatusChanged;
   final VoidCallback? onDeleteOrMove;
+  final StarStatusChangedCallback? onStarStatusChanged;
+  final String? emptyListMessage;
+  final IconData? emptyListIcon;
 
   const EmailListView({
     super.key,
@@ -23,6 +27,9 @@ class EmailListView extends StatelessWidget {
     this.onRefresh,
     this.onReadStatusChanged,
     this.onDeleteOrMove,
+    this.onStarStatusChanged,
+    this.emptyListMessage,
+    this.emptyListIcon,
   });
 
   @override
@@ -30,23 +37,32 @@ class EmailListView extends StatelessWidget {
     if (emails.isEmpty) {
       String message;
       IconData iconData;
-      switch (currentScreenFolder) {
-        case EmailFolder.inbox:
-          message = 'Your inbox is empty!';
-          iconData = Icons.inbox_outlined;
-          break;
-        case EmailFolder.sent:
-          message = 'No emails in Sent folder!';
-          iconData = Icons.outbox_outlined;
-          break;
-        case EmailFolder.drafts:
-          message = 'No drafts!';
-          iconData = Icons.edit_note_outlined;
-          break;
-        case EmailFolder.trash:
-          message = 'Trash is empty!';
-          iconData = Icons.delete_sweep_outlined;
-          break;
+
+      if (emptyListMessage != null) {
+        message = emptyListMessage!;
+        iconData = emptyListIcon ?? Icons.email_outlined;
+      } else {
+        switch (currentScreenFolder) {
+          case EmailFolder.inbox:
+            message = 'Your inbox is empty!';
+            iconData = Icons.inbox_outlined;
+            break;
+          case EmailFolder.sent:
+            message = 'No emails in Sent folder!';
+            iconData = Icons.outbox_outlined;
+            break;
+          case EmailFolder.drafts:
+            message = 'No drafts!';
+            iconData = Icons.edit_note_outlined;
+            break;
+          case EmailFolder.trash:
+            message = 'Trash is empty!';
+            iconData = Icons.delete_sweep_outlined;
+            break;
+          default:
+            message = 'No emails to show.';
+            iconData = Icons.email_outlined;
+        }
       }
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -61,6 +77,7 @@ class EmailListView extends StatelessWidget {
                 Text(
                   message,
                   style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -79,6 +96,7 @@ class EmailListView extends StatelessWidget {
           onTap: () => onEmailTap(email),
           onReadStatusChanged: onReadStatusChanged,
           onDeleteOrMove: onDeleteOrMove,
+          onStarStatusChanged: onStarStatusChanged,
         );
       },
     );

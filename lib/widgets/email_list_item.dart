@@ -13,6 +13,7 @@ class EmailListItem extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onReadStatusChanged;
   final VoidCallback? onDeleteOrMove;
+  final VoidCallback? onStarStatusChanged;
 
   const EmailListItem({
     super.key,
@@ -21,6 +22,7 @@ class EmailListItem extends StatefulWidget {
     this.onTap,
     this.onReadStatusChanged,
     this.onDeleteOrMove,
+    this.onStarStatusChanged,
   });
 
   @override
@@ -45,7 +47,8 @@ class _EmailListItemState extends State<EmailListItem> {
     super.didUpdateWidget(oldWidget);
     bool emailChanged =
         widget.email.id != oldWidget.email.id ||
-        widget.email.from['userId'] != oldWidget.email.from['userId'];
+        widget.email.from['userId'] != oldWidget.email.from['userId'] ||
+        widget.email.isStarred != oldWidget.email.isStarred;
     if (emailChanged || widget.email.isRead != _currentEmail.isRead) {
       setState(() {
         _currentEmail = widget.email;
@@ -62,15 +65,15 @@ class _EmailListItemState extends State<EmailListItem> {
     if (!mounted) return;
     setState(() {
       _isLoadingProfileInfo = true;
-      _photoUrl = null;
     });
 
     String? contactIdToLookup;
     String nameForInitialFallback = "Unknown";
 
     final effectiveFolder =
-        widget.currentScreenFolder == EmailFolder.trash
-            ? widget.email.originalFolder ?? widget.email.folder
+        widget.currentScreenFolder == EmailFolder.trash &&
+                _currentEmail.originalFolder != null
+            ? _currentEmail.originalFolder!
             : widget.currentScreenFolder;
 
     final currentUser =
@@ -78,23 +81,23 @@ class _EmailListItemState extends State<EmailListItem> {
 
     switch (effectiveFolder) {
       case EmailFolder.inbox:
-        contactIdToLookup = widget.email.from['userId'];
+        contactIdToLookup = _currentEmail.from['userId'];
         nameForInitialFallback =
-            widget.email.from['displayName'] ?? 'Unknown Sender';
+            _currentEmail.from['displayName'] ?? 'Unknown Sender';
         break;
       case EmailFolder.sent:
-        if (widget.email.to.isNotEmpty) {
-          contactIdToLookup = widget.email.to.first['userId'];
+        if (_currentEmail.to.isNotEmpty) {
+          contactIdToLookup = _currentEmail.to.first['userId'];
           nameForInitialFallback =
-              widget.email.to.first['displayName'] ?? 'Unknown Recipient';
-        } else if (widget.email.cc?.isNotEmpty == true) {
-          contactIdToLookup = widget.email.cc!.first['userId'];
+              _currentEmail.to.first['displayName'] ?? 'Unknown Recipient';
+        } else if (_currentEmail.cc?.isNotEmpty == true) {
+          contactIdToLookup = _currentEmail.cc!.first['userId'];
           nameForInitialFallback =
-              widget.email.cc!.first['displayName'] ?? 'Unknown Recipient';
-        } else if (widget.email.bcc?.isNotEmpty == true) {
-          contactIdToLookup = widget.email.bcc!.first['userId'];
+              _currentEmail.cc!.first['displayName'] ?? 'Unknown Recipient';
+        } else if (_currentEmail.bcc?.isNotEmpty == true) {
+          contactIdToLookup = _currentEmail.bcc!.first['userId'];
           nameForInitialFallback =
-              widget.email.bcc!.first['displayName'] ?? 'Unknown Recipient';
+              _currentEmail.bcc!.first['displayName'] ?? 'Unknown Recipient';
         } else {
           nameForInitialFallback = 'Unknown Recipient';
         }
@@ -115,8 +118,8 @@ class _EmailListItemState extends State<EmailListItem> {
         }
         break;
       default:
-        contactIdToLookup = widget.email.from['userId'];
-        nameForInitialFallback = widget.email.from['displayName'] ?? 'Unknown';
+        contactIdToLookup = _currentEmail.from['userId'];
+        nameForInitialFallback = _currentEmail.from['displayName'] ?? 'Unknown';
         break;
     }
 
@@ -154,7 +157,7 @@ class _EmailListItemState extends State<EmailListItem> {
       }
     } catch (e) {
       print(
-        "EmailListItem (${widget.email.id}): Error fetching profile for contactId '$contactIdToLookup': $e",
+        "EmailListItem (${_currentEmail.id}): Error fetching profile for contactId '$contactIdToLookup': $e",
       );
       if (mounted) {
         setState(() {
@@ -208,10 +211,11 @@ class _EmailListItemState extends State<EmailListItem> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (userId == null) {
-      if (mounted)
+      if (mounted) {
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Please sign in to continue')),
         );
+      }
       return;
     }
 
@@ -223,20 +227,17 @@ class _EmailListItemState extends State<EmailListItem> {
         isRead: newReadStatus,
       );
       if (mounted) {
+        setState(() {
+          _currentEmail = _currentEmail.copyWith(isRead: newReadStatus);
+        });
         widget.onReadStatusChanged?.call();
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              _currentEmail.isRead ? 'Marked as unread' : 'Marked as read',
-            ),
-          ),
-        );
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Error changing status: ${e.toString()}')),
         );
+      }
     }
   }
 
@@ -250,10 +251,11 @@ class _EmailListItemState extends State<EmailListItem> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (userId == null) {
-      if (mounted)
+      if (mounted) {
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Please sign in to continue')),
         );
+      }
       return;
     }
 
@@ -269,7 +271,6 @@ class _EmailListItemState extends State<EmailListItem> {
       dialogContent = 'Are you sure you want to permanently delete this email?';
       confirmButtonText = 'Delete Permanently';
     } else if (widget.currentScreenFolder == EmailFolder.drafts) {
-      confirmPermanentDelete = false;
       dialogTitle = 'Delete Draft';
       dialogContent = 'Are you sure you want to move this draft to the trash?';
       confirmButtonText = 'Move to Trash';
@@ -298,7 +299,7 @@ class _EmailListItemState extends State<EmailListItem> {
       },
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
     try {
       if (confirmPermanentDelete) {
@@ -306,12 +307,18 @@ class _EmailListItemState extends State<EmailListItem> {
           userId: userId,
           emailId: _currentEmail.id,
         );
-        if (mounted)
+        if (mounted) {
           scaffoldMessenger.showSnackBar(
             const SnackBar(content: Text('Email permanently deleted')),
           );
+        }
       } else {
         EmailFolder folderToSaveAsOriginal = widget.currentScreenFolder;
+        if (_currentEmail.folder == EmailFolder.trash &&
+            _currentEmail.originalFolder != null) {
+          folderToSaveAsOriginal = _currentEmail.originalFolder!;
+        }
+
         await firestoreService.deleteEmail(
           userId: userId,
           emailId: _currentEmail.id,
@@ -332,20 +339,64 @@ class _EmailListItemState extends State<EmailListItem> {
       }
       widget.onDeleteOrMove?.call();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Error performing action: ${e.toString()}')),
         );
+      }
+    }
+  }
+
+  Future<void> _toggleStarStatus(BuildContext context) async {
+    final firestoreService = Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    );
+    final userId =
+        Provider.of<AuthService>(context, listen: false).currentUser?.uid;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    if (userId == null) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Please sign in to continue')),
+        );
+      }
+      return;
+    }
+
+    try {
+      bool newIsStarredState = !_currentEmail.isStarred;
+      await firestoreService.toggleStarStatus(
+        userId: userId,
+        emailId: _currentEmail.id,
+        newIsStarredState: newIsStarredState,
+      );
+      if (mounted) {
+        setState(() {
+          _currentEmail = _currentEmail.copyWith(isStarred: newIsStarredState);
+        });
+        widget.onStarStatusChanged?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Error updating star status: ${e.toString()}'),
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isUnread = !_currentEmail.isRead;
-
+    final bool isStarred = _currentEmail.isStarred;
     final EmailFolder displayContextFolder =
-        widget.currentScreenFolder == EmailFolder.trash
-            ? _currentEmail.originalFolder ?? _currentEmail.folder
+        widget.currentScreenFolder == EmailFolder.trash &&
+                _currentEmail.originalFolder != null
+            ? _currentEmail.originalFolder!
             : widget.currentScreenFolder;
 
     bool isActuallyDraftDisplay = displayContextFolder == EmailFolder.drafts;
@@ -364,7 +415,6 @@ class _EmailListItemState extends State<EmailListItem> {
         (isUnread && !isActuallyDraftDisplay) ? Colors.black87 : Colors.black54;
 
     String nameToDisplay;
-
     switch (displayContextFolder) {
       case EmailFolder.inbox:
         nameToDisplay =
@@ -441,6 +491,20 @@ class _EmailListItemState extends State<EmailListItem> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    ListTile(
+                      leading: Icon(
+                        isStarred ? Icons.star : Icons.star_border,
+                        color:
+                            isStarred
+                                ? AppColors.accent
+                                : AppColors.secondaryIcon,
+                      ),
+                      title: Text(isStarred ? 'Unstar email' : 'Star email'),
+                      onTap: () async {
+                        Navigator.pop(bottomSheetContext);
+                        await _toggleStarStatus(bottomSheetContext);
+                      },
+                    ),
                     if (widget.currentScreenFolder == EmailFolder.inbox ||
                         (widget.currentScreenFolder == EmailFolder.trash &&
                             _currentEmail.originalFolder == EmailFolder.inbox))
@@ -500,12 +564,12 @@ class _EmailListItemState extends State<EmailListItem> {
           children: [
             _isLoadingProfileInfo
                 ? CircleAvatar(
-                  backgroundColor: Colors.blueGrey[100],
+                  backgroundColor: Colors.blueGrey[50],
                   child: const SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
+                      strokeWidth: 1.5,
                       color: AppColors.primary,
                     ),
                   ),
@@ -595,16 +659,19 @@ class _EmailListItemState extends State<EmailListItem> {
                             : FontWeight.normal,
                   ),
                 ),
-                if (isUnread && !isActuallyDraftDisplay)
-                  Container(
-                    margin: const EdgeInsets.only(top: 6.0),
-                    height: 8,
-                    width: 8,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
+                const SizedBox(height: 4),
+                InkResponse(
+                  onTap: () => _toggleStarStatus(context),
+                  radius: 20,
+                  child: Padding(
+                    padding: const EdgeInsets.all(2.0),
+                    child: Icon(
+                      isStarred ? Icons.star : Icons.star_border,
+                      color: isStarred ? AppColors.accent : Colors.grey[400],
+                      size: 22.0,
                     ),
                   ),
+                ),
               ],
             ),
           ],

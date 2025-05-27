@@ -6,6 +6,7 @@ import 'package:email_application/screens/inbox/inbox_screen.dart';
 import 'package:email_application/screens/sent/sent_screen.dart';
 import 'package:email_application/screens/drafts/drafts_screen.dart';
 import 'package:email_application/screens/trash/trash_screen.dart';
+import 'package:email_application/screens/starred/starred_screen.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,12 +24,20 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = [
     const InboxScreen(),
     const SentScreen(),
+    const StarredScreen(),
     const DraftsScreen(),
     const TrashScreen(),
     const ViewProfileScreen(),
   ];
 
-  final List<String> _titles = ['Inbox', 'Sent', 'Drafts', 'Trash', 'Profile'];
+  final List<String> _titles = [
+    'Inbox',
+    'Sent',
+    'Starred',
+    'Drafts',
+    'Trash',
+    'Profile',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -36,14 +45,10 @@ class _MainScreenState extends State<MainScreen> {
         Provider.of<AuthService>(context, listen: false).currentUser;
 
     if (user == null) {
-      return Scaffold(
-        body: Center(
-          child: Text(
-            'Please log in again.',
-            style: TextStyle(fontSize: 16, color: AppColors.secondaryText),
-          ),
-        ),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -129,20 +134,25 @@ class _MainScreenState extends State<MainScreen> {
                       index: 1,
                     ),
                     _buildDrawerItem(
+                      icon: Icons.star_outline_rounded,
+                      title: 'Starred',
+                      index: 2,
+                    ),
+                    _buildDrawerItem(
                       icon: Icons.drafts_outlined,
                       title: 'Drafts',
-                      index: 2,
+                      index: 3,
                     ),
                     _buildDrawerItem(
                       icon: Icons.delete_outline_rounded,
                       title: 'Trash',
-                      index: 3,
+                      index: 4,
                     ),
                     Divider(color: Colors.grey.shade300, height: 1),
                     _buildDrawerItem(
                       icon: Icons.person_outline_rounded,
                       title: 'Profile',
-                      index: 4,
+                      index: 5,
                     ),
                   ],
                 ),
@@ -185,10 +195,12 @@ class _MainScreenState extends State<MainScreen> {
           title,
           style: TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
             color: isSelected ? AppColors.primary : Colors.black87,
           ),
         ),
+        selected: isSelected,
+        selectedTileColor: AppColors.primary.withOpacity(0.08),
         onTap: () {
           setState(() {
             _currentIndex = index;
