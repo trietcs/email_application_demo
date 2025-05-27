@@ -7,6 +7,7 @@ import 'package:email_application/screens/sent/sent_screen.dart';
 import 'package:email_application/screens/drafts/drafts_screen.dart';
 import 'package:email_application/screens/trash/trash_screen.dart';
 import 'package:email_application/screens/starred/starred_screen.dart';
+import 'package:email_application/screens/labels/manage_labels_screen.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -39,6 +40,63 @@ class _MainScreenState extends State<MainScreen> {
     'Profile',
   ];
 
+  Widget _buildIndexedStackDrawerItem({
+    required IconData icon,
+    required String title,
+    required int index,
+  }) {
+    final bool isSelected = _currentIndex == index;
+    return Material(
+      color:
+          isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: isSelected ? AppColors.primary : AppColors.secondaryIcon,
+          size: 24,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            color: isSelected ? AppColors.primary : Colors.black87,
+          ),
+        ),
+        selected: isSelected,
+        selectedTileColor: AppColors.primary.withOpacity(0.08),
+        onTap: () {
+          setState(() {
+            _currentIndex = index;
+          });
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  Widget _buildRouteDrawerItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.secondaryIcon, size: 24),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final User? user =
@@ -46,7 +104,9 @@ class _MainScreenState extends State<MainScreen> {
 
     if (user == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushReplacementNamed('/login');
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
       });
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -123,33 +183,47 @@ class _MainScreenState extends State<MainScreen> {
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    _buildDrawerItem(
+                    _buildIndexedStackDrawerItem(
                       icon: Icons.inbox_outlined,
                       title: 'Inbox',
                       index: 0,
                     ),
-                    _buildDrawerItem(
+                    _buildIndexedStackDrawerItem(
                       icon: Icons.send_outlined,
                       title: 'Sent',
                       index: 1,
                     ),
-                    _buildDrawerItem(
+                    _buildIndexedStackDrawerItem(
                       icon: Icons.star_outline_rounded,
                       title: 'Starred',
                       index: 2,
                     ),
-                    _buildDrawerItem(
+                    _buildIndexedStackDrawerItem(
                       icon: Icons.drafts_outlined,
                       title: 'Drafts',
                       index: 3,
                     ),
-                    _buildDrawerItem(
+                    _buildIndexedStackDrawerItem(
                       icon: Icons.delete_outline_rounded,
                       title: 'Trash',
                       index: 4,
                     ),
-                    Divider(color: Colors.grey.shade300, height: 1),
-                    _buildDrawerItem(
+                    const Divider(height: 1),
+                    _buildRouteDrawerItem(
+                      icon: Icons.label_outline_rounded,
+                      title: 'Manage Labels',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ManageLabelsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(height: 1),
+                    _buildIndexedStackDrawerItem(
                       icon: Icons.person_outline_rounded,
                       title: 'Profile',
                       index: 5,
@@ -172,41 +246,6 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: AppColors.primary,
         tooltip: 'Compose',
         child: Icon(Icons.edit_outlined, color: AppColors.onPrimary, size: 26),
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem({
-    required IconData icon,
-    required String title,
-    required int index,
-  }) {
-    final bool isSelected = _currentIndex == index;
-    return Material(
-      color:
-          isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: isSelected ? AppColors.primary : AppColors.secondaryIcon,
-          size: 24,
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-            color: isSelected ? AppColors.primary : Colors.black87,
-          ),
-        ),
-        selected: isSelected,
-        selectedTileColor: AppColors.primary.withOpacity(0.08),
-        onTap: () {
-          setState(() {
-            _currentIndex = index;
-          });
-          Navigator.pop(context);
-        },
       ),
     );
   }
