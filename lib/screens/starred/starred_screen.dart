@@ -6,6 +6,7 @@ import 'package:email_application/models/label_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:email_application/screens/emails/view_email_screen.dart';
+import 'package:email_application/screens/compose/compose_email_screen.dart';
 import 'package:email_application/widgets/email_list_item.dart';
 import 'package:email_application/widgets/email_list_view.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -52,7 +53,12 @@ class _StarredScreenState extends State<StarredScreen> {
     });
 
     if (_currentUser == null) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _starredEmails = [];
+        });
+      }
       return;
     }
 
@@ -70,13 +76,17 @@ class _StarredScreenState extends State<StarredScreen> {
         setState(() {
           _error = e.toString();
           _isLoading = false;
+          _starredEmails = [];
         });
       }
     }
   }
 
   Future<void> _fetchUserLabels() async {
-    if (_currentUser == null || !mounted) return;
+    if (_currentUser == null || !mounted) {
+      if (mounted) _userLabels = [];
+      return;
+    }
     try {
       final firestoreService = Provider.of<FirestoreService>(
         context,
@@ -89,7 +99,6 @@ class _StarredScreenState extends State<StarredScreen> {
     } catch (e) {
       if (mounted) {
         print("StarredScreen: Error fetching labels: $e");
-        _error = "Failed to load labels: ${e.toString()}";
       }
       throw e;
     }
@@ -121,7 +130,6 @@ class _StarredScreenState extends State<StarredScreen> {
     } catch (e) {
       if (mounted) {
         print('StarredScreen _loadStarredEmails Error: $e');
-        _error = "Failed to load emails: ${e.toString()}";
       }
       throw e;
     }
@@ -130,14 +138,25 @@ class _StarredScreenState extends State<StarredScreen> {
   Future<void> _handleEmailTap(EmailData email) async {
     if (!mounted || _currentUser == null) return;
 
-    final resultFromView = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ViewEmailScreen(emailData: email),
-      ),
-    );
+    dynamic resultFromNextScreen;
 
-    if (resultFromView == true) {
+    if (email.folder == EmailFolder.drafts) {
+      resultFromNextScreen = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ComposeEmailScreen(draftToEdit: email),
+        ),
+      );
+    } else {
+      resultFromNextScreen = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ViewEmailScreen(emailData: email),
+        ),
+      );
+    }
+
+    if (resultFromNextScreen == true) {
       _loadInitialData();
     } else {
       final firestoreService = Provider.of<FirestoreService>(
@@ -157,7 +176,7 @@ class _StarredScreenState extends State<StarredScreen> {
           }
         }
       } catch (e) {
-        print("Error checking email status after pop from ViewEmailScreen: $e");
+        print("StarredScreen: Error checking email status after pop: $e");
         if (mounted) {
           _loadInitialData();
         }
