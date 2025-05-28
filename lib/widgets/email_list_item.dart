@@ -77,7 +77,7 @@ class _EmailListItemState extends State<EmailListItem> {
         widget.email.from['userId'] != oldWidget.email.from['userId'] ||
         (widget.email.to.isNotEmpty &&
             oldWidget.email.to.isNotEmpty &&
-            oldWidget.email.to.first['userId'] !=
+            widget.email.to.first['userId'] !=
                 oldWidget.email.to.first['userId']) ||
         (widget.email.to.isEmpty && oldWidget.email.to.isNotEmpty) ||
         (widget.email.to.isNotEmpty && oldWidget.email.to.isEmpty) ||
@@ -261,20 +261,20 @@ class _EmailListItemState extends State<EmailListItem> {
     }
   }
 
-  Future<void> _toggleReadStatus(BuildContext context) async {
+  Future<void> _toggleReadStatus(BuildContext itemContext) async {
     if (widget.currentScreenFolder == EmailFolder.drafts ||
         widget.currentScreenFolder == EmailFolder.sent)
       return;
 
     final firestoreService = Provider.of<FirestoreService>(
-      context,
+      itemContext,
       listen: false,
     );
     final userId =
-        Provider.of<AuthService>(context, listen: false).currentUser?.uid;
+        Provider.of<AuthService>(itemContext, listen: false).currentUser?.uid;
 
     if (userId == null || !mounted) return;
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(itemContext);
 
     try {
       bool newReadStatus = !_currentEmail.isRead;
@@ -300,16 +300,16 @@ class _EmailListItemState extends State<EmailListItem> {
     }
   }
 
-  Future<void> _deleteEmail(BuildContext context) async {
+  Future<void> _deleteEmail(BuildContext itemContext) async {
     final firestoreService = Provider.of<FirestoreService>(
-      context,
+      itemContext,
       listen: false,
     );
     final userId =
-        Provider.of<AuthService>(context, listen: false).currentUser?.uid;
+        Provider.of<AuthService>(itemContext, listen: false).currentUser?.uid;
 
     if (userId == null || !mounted) return;
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(itemContext);
 
     bool confirmPermanentDelete = false;
     String dialogTitle = 'Confirm Deletion';
@@ -389,24 +389,23 @@ class _EmailListItemState extends State<EmailListItem> {
       }
       widget.onDeleteOrMove?.call();
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Error performing action: ${e.toString()}')),
         );
-      }
     }
   }
 
-  Future<void> _toggleStarStatus(BuildContext context) async {
+  Future<void> _toggleStarStatus(BuildContext itemContext) async {
     final firestoreService = Provider.of<FirestoreService>(
-      context,
+      itemContext,
       listen: false,
     );
     final userId =
-        Provider.of<AuthService>(context, listen: false).currentUser?.uid;
+        Provider.of<AuthService>(itemContext, listen: false).currentUser?.uid;
 
     if (userId == null || !mounted) return;
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(itemContext);
 
     try {
       bool newIsStarredState = !_currentEmail.isStarred;
@@ -436,7 +435,6 @@ class _EmailListItemState extends State<EmailListItem> {
     if (_currentEmail.labelIds.isEmpty || widget.allUserLabels.isEmpty) {
       return const SizedBox.shrink();
     }
-
     List<Widget> chips = [];
     for (String labelId in _currentEmail.labelIds) {
       LabelData? foundLabel;
@@ -446,8 +444,7 @@ class _EmailListItemState extends State<EmailListItem> {
 
       if (foundLabel != null) {
         final Color chipBackgroundColor = foundLabel.color.withOpacity(0.18);
-        final Color chipBorderAndTextColor = foundLabel.color.withOpacity(0.6);
-
+        final Color chipTextColor = Colors.black87;
         chips.add(
           Padding(
             padding: const EdgeInsets.only(right: 5.0, top: 4.0),
@@ -456,7 +453,7 @@ class _EmailListItemState extends State<EmailListItem> {
                 foundLabel.name,
                 style: TextStyle(
                   fontSize: 10.5,
-                  color: chipBorderAndTextColor,
+                  color: chipTextColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -468,19 +465,157 @@ class _EmailListItemState extends State<EmailListItem> {
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(6),
-                side: BorderSide(color: chipBorderAndTextColor, width: 1.0),
+                side: BorderSide(
+                  color: foundLabel.color.withOpacity(0.6),
+                  width: 1.0,
+                ),
               ),
             ),
           ),
         );
       }
     }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Wrap(spacing: 3.0, runSpacing: 2.0, children: chips);
+  }
 
-    if (chips.isEmpty) {
-      return const SizedBox.shrink();
+  Future<void> _showLabelSelectionDialogForListItem(
+    BuildContext parentContext,
+  ) async {
+    final String? currentUserId =
+        Provider.of<AuthService>(parentContext, listen: false).currentUser?.uid;
+    final FirestoreService firestoreService = Provider.of<FirestoreService>(
+      parentContext,
+      listen: false,
+    );
+    final ScaffoldMessengerState scaffoldMessenger = ScaffoldMessenger.of(
+      parentContext,
+    );
+
+    if (currentUserId == null) {
+      if (mounted)
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text("Please log in.")),
+        );
+      return;
     }
 
-    return Wrap(spacing: 3.0, runSpacing: 2.0, children: chips);
+    List<String> selectedLabelIds = List<String>.from(_currentEmail.labelIds);
+    bool dialogActionPerformed = false;
+
+    bool? saved = await showDialog<bool>(
+      context: parentContext,
+      builder: (BuildContext dialogContext) {
+        bool localChangesMade = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Label'),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 0,
+                vertical: 20,
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child:
+                    widget.allUserLabels.isEmpty
+                        ? const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Text(
+                            "No labels created yet. Go to 'Manage Labels' to create some.",
+                          ),
+                        )
+                        : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: widget.allUserLabels.length,
+                          itemBuilder: (lbContext, index) {
+                            final label = widget.allUserLabels[index];
+                            final bool isSelected = selectedLabelIds.contains(
+                              label.id,
+                            );
+                            return CheckboxListTile(
+                              title: Text(
+                                label.name,
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                              value: isSelected,
+                              onChanged: (bool? value) {
+                                setDialogState(() {
+                                  if (value == true) {
+                                    if (!isSelected)
+                                      selectedLabelIds.add(label.id);
+                                  } else {
+                                    selectedLabelIds.remove(label.id);
+                                  }
+                                  localChangesMade = true;
+                                });
+                              },
+                              secondary: Icon(Icons.label, color: label.color),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              dense: true,
+                            );
+                          },
+                        ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  child: Text(
+                    'Apply',
+                    style: TextStyle(color: AppColors.onPrimary),
+                  ),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved == true) {
+      bool hasActualChanges =
+          !listEquals(_currentEmail.labelIds, selectedLabelIds);
+
+      if (hasActualChanges) {
+        if (!mounted) return;
+        try {
+          await firestoreService.updateEmailLabels(
+            currentUserId,
+            _currentEmail.id,
+            selectedLabelIds,
+          );
+          if (mounted) {
+            setState(() {
+              _currentEmail = _currentEmail.copyWith(
+                labelIds: selectedLabelIds,
+              );
+            });
+            widget.onStarStatusChanged?.call();
+            scaffoldMessenger.showSnackBar(
+              const SnackBar(
+                content: Text('Labels updated!'),
+                duration: Duration(seconds: 1),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(content: Text('Error updating labels: ${e.toString()}')),
+            );
+          }
+        }
+      }
+    }
   }
 
   @override
@@ -509,7 +644,7 @@ class _EmailListItemState extends State<EmailListItem> {
     Color itemTextColor =
         (isUnread && !isActuallyDraftDisplay) ? Colors.black87 : Colors.black54;
 
-    String nameToDisplay;
+    String nameToDisplay = _nameForAvatarAndInitial ?? "Unknown";
     switch (displayContextFolder) {
       case EmailFolder.inbox:
         nameToDisplay =
@@ -518,23 +653,7 @@ class _EmailListItemState extends State<EmailListItem> {
             _currentEmail.senderName;
         break;
       case EmailFolder.sent:
-        if ((_currentEmail.to.length +
-                (_currentEmail.cc?.length ?? 0) +
-                (_currentEmail.bcc?.length ?? 0)) >
-            1) {
-          nameToDisplay = 'To: Multiple Recipients';
-        } else if (_currentEmail.to.isNotEmpty) {
-          nameToDisplay =
-              'To: ${(_nameForAvatarAndInitial != "Unknown Recipient" && _nameForAvatarAndInitial != null && !_nameForAvatarAndInitial!.startsWith("To:") ? _nameForAvatarAndInitial : (_currentEmail.to.first['displayName'] ?? _currentEmail.to.first['email'] ?? "Unknown Recipient"))}';
-        } else if (_currentEmail.cc?.isNotEmpty == true) {
-          nameToDisplay =
-              'To: ${(_nameForAvatarAndInitial != "Unknown Recipient" && _nameForAvatarAndInitial != null && !_nameForAvatarAndInitial!.startsWith("To:") ? _nameForAvatarAndInitial : (_currentEmail.cc!.first['displayName'] ?? _currentEmail.cc!.first['email'] ?? "Unknown Recipient"))}';
-        } else if (_currentEmail.bcc?.isNotEmpty == true) {
-          nameToDisplay =
-              'To: ${(_nameForAvatarAndInitial != "Unknown Recipient" && _nameForAvatarAndInitial != null && !_nameForAvatarAndInitial!.startsWith("To:") ? _nameForAvatarAndInitial : (_currentEmail.bcc!.first['displayName'] ?? _currentEmail.bcc!.first['email'] ?? "Unknown Recipient"))}';
-        } else {
-          nameToDisplay = 'To: (No recipients)';
-        }
+        nameToDisplay = _nameForAvatarAndInitial ?? 'To: (Error)';
         break;
       case EmailFolder.drafts:
         nameToDisplay = "Draft";
@@ -545,21 +664,10 @@ class _EmailListItemState extends State<EmailListItem> {
             _nameForAvatarAndInitial ??
             _currentEmail.from['displayName'] ??
             _currentEmail.senderName;
-        if (_currentEmail.originalFolder == EmailFolder.drafts) {
+        if (_currentEmail.originalFolder == EmailFolder.drafts &&
+            displayContextFolder == EmailFolder.trash) {
           nameToDisplay = "Draft";
           displayNameColor = AppColors.error;
-        } else if (_currentEmail.originalFolder == EmailFolder.sent) {
-          if ((_currentEmail.to.length +
-                  (_currentEmail.cc?.length ?? 0) +
-                  (_currentEmail.bcc?.length ?? 0)) >
-              1) {
-            nameToDisplay = 'To: Multiple Recipients';
-          } else if (_currentEmail.to.isNotEmpty) {
-            nameToDisplay =
-                'To: ${(_currentEmail.to.first['displayName'] ?? _currentEmail.to.first['email'] ?? "Unknown Recipient")}';
-          } else {
-            nameToDisplay = 'To: (No recipients)';
-          }
         }
         break;
     }
@@ -591,7 +699,7 @@ class _EmailListItemState extends State<EmailListItem> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           builder:
-              (bottomSheetContext) => SafeArea(
+              (bottomSheetCtxt) => SafeArea(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -605,8 +713,19 @@ class _EmailListItemState extends State<EmailListItem> {
                       ),
                       title: Text(isStarred ? 'Unstar email' : 'Star email'),
                       onTap: () async {
-                        Navigator.pop(bottomSheetContext);
+                        Navigator.pop(bottomSheetCtxt);
                         await _toggleStarStatus(context);
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(
+                        Icons.label_outline_rounded,
+                        color: AppColors.secondaryIcon,
+                      ),
+                      title: const Text('Label'),
+                      onTap: () {
+                        Navigator.pop(bottomSheetCtxt);
+                        _showLabelSelectionDialogForListItem(context);
                       },
                     ),
                     if (widget.currentScreenFolder == EmailFolder.inbox ||
@@ -628,7 +747,7 @@ class _EmailListItemState extends State<EmailListItem> {
                               : 'Mark as read',
                         ),
                         onTap: () async {
-                          Navigator.pop(bottomSheetContext);
+                          Navigator.pop(bottomSheetCtxt);
                           await _toggleReadStatus(context);
                         },
                       ),
@@ -643,7 +762,7 @@ class _EmailListItemState extends State<EmailListItem> {
                             : 'Move to Trash',
                       ),
                       onTap: () async {
-                        Navigator.pop(bottomSheetContext);
+                        Navigator.pop(bottomSheetCtxt);
                         await _deleteEmail(context);
                       },
                     ),

@@ -74,8 +74,8 @@ class MyApp extends StatelessWidget {
           error: AppColors.error,
         ),
 
-        dividerTheme: const DividerThemeData(
-          color: AppColors.secondaryIcon,
+        dividerTheme: DividerThemeData(
+          color: Colors.grey.shade200,
           thickness: 1,
         ),
       ),

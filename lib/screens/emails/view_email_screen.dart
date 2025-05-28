@@ -791,10 +791,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                 vertical: 2.0,
               ),
               labelStyle: TextStyle(
-                color:
-                    labelData.color.computeLuminance() > 0.5
-                        ? Colors.black87
-                        : Colors.white,
+                color: Colors.black87,
                 fontWeight: FontWeight.w500,
               ),
               shape: RoundedRectangleBorder(
