@@ -8,6 +8,98 @@ class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   CollectionReference get usersCollection => _db.collection('users');
 
+  Set<String> _generateSearchableKeywords({
+    required String subject,
+    required String body,
+    Map<String, String?>? from,
+  }) {
+    final Set<String> keywords = {};
+    final RegExp wordRegex = RegExp(r"\b\w+\b");
+
+    void addTextToKeywords(String? text) {
+      if (text == null || text.isEmpty) return;
+      wordRegex.allMatches(text.toLowerCase()).forEach((match) {
+        if (match.group(0) != null && match.group(0)!.length > 2) {
+          keywords.add(match.group(0)!);
+        }
+      });
+    }
+
+    addTextToKeywords(subject);
+    addTextToKeywords(body);
+    from?.forEach((key, value) {
+      addTextToKeywords(value);
+    });
+    return keywords;
+  }
+
+  Future<List<Map<String, dynamic>>> searchEmailsBasic(
+    String userId,
+    String searchTermRaw, {
+    int? limitResults,
+  }) async {
+    if (searchTermRaw.trim().isEmpty) {
+      return [];
+    }
+
+    List<String> searchTerms =
+        searchTermRaw
+            .toLowerCase()
+            .split(RegExp(r'\s+'))
+            .where((term) => term.isNotEmpty && term.length > 1)
+            .toSet()
+            .toList();
+
+    if (searchTerms.isEmpty) {
+      return [];
+    }
+
+    try {
+      Query query = usersCollection.doc(userId).collection('userEmails');
+
+      if (searchTerms.length == 1) {
+        query = query.where(
+          'searchableKeywords',
+          arrayContains: searchTerms.first,
+        );
+      } else {
+        query = query.where(
+          'searchableKeywords',
+          arrayContainsAny: searchTerms.take(10).toList(),
+        );
+      }
+
+      query = query.orderBy('timestamp', descending: true);
+
+      if (limitResults != null && limitResults > 0) {
+        query = query.limit(limitResults);
+      } else {
+        query = query.limit(30);
+      }
+
+      final snapshot = await query.get();
+
+      print(
+        'FirestoreService: searchEmailsBasic found ${snapshot.size} emails for terms: $searchTerms (limit: $limitResults)',
+      );
+
+      return snapshot.docs.map<Map<String, dynamic>>((doc) {
+        final dynamic docData = doc.data();
+        if (docData != null && docData is Map<String, dynamic>) {
+          return {...docData, 'id': doc.id};
+        } else {
+          print(
+            'Warning: Document ${doc.id} in search results has null or invalid data. Data: $docData',
+          );
+          return {'id': doc.id};
+        }
+      }).toList();
+    } catch (e) {
+      print('Error in searchEmailsBasic for terms "$searchTerms": $e');
+      return [];
+    }
+  }
+
   Future<Map<String, dynamic>?> getUserProfile(String userId) async {
     try {
       final docSnapshot = await usersCollection.doc(userId).get();
@@ -236,6 +328,19 @@ class FirestoreService {
       final senderActualEmail =
           senderProfile?['customEmail'] ?? 'unknown_sender@tvamail.com';
 
+      final Map<String, String?> fromMap = {
+        'userId': senderId,
+        'displayName': senderDisplayName,
+        'email': senderActualEmail,
+      };
+
+      final keywords =
+          _generateSearchableKeywords(
+            subject: subject,
+            body: body,
+            from: fromMap,
+          ).toList();
+
       final emailDataForSender = {
         'from': {
           'userId': senderId,
@@ -247,13 +352,15 @@ class FirestoreService {
         'bcc': bcc ?? [],
         'subject': subject,
         'body': body,
-        'timestamp': now,
+        'timestamp': FieldValue.serverTimestamp(),
+        'firestoreTimestamp': FieldValue.serverTimestamp(),
         'folder': EmailFolder.sent.folderName,
         'originalFolder': EmailFolder.sent.folderName,
         'isRead': true,
         'isStarred': false,
         'attachments': attachments ?? [],
         'labelIds': [],
+        'searchableKeywords': keywords,
       };
       await usersCollection
           .doc(senderId)
@@ -451,6 +558,19 @@ class FirestoreService {
       final senderActualEmail =
           senderProfile?['customEmail'] ?? 'unknown_draft_sender@tvamail.com';
 
+      final Map<String, String?> fromMap = {
+        'userId': userId,
+        'displayName': senderDisplayName,
+        'email': senderActualEmail,
+      };
+
+      final keywords =
+          _generateSearchableKeywords(
+            subject: subject,
+            body: body,
+            from: fromMap,
+          ).toList();
+
       final draftData = {
         'from': {
           'userId': userId,
@@ -469,6 +589,7 @@ class FirestoreService {
         'isStarred': false,
         'attachments': attachments ?? [],
         'labelIds': [],
+        'searchableKeywords': keywords,
       };
       final docRef = await usersCollection
           .doc(userId)
@@ -499,6 +620,18 @@ class FirestoreService {
       final senderProfile = await getUserProfile(userId);
       final senderActualEmail =
           senderProfile?['customEmail'] ?? 'unknown_draft_sender@tvamail.com';
+      final Map<String, String?> fromMap = {
+        'userId': userId,
+        'displayName': senderDisplayName,
+        'email': senderActualEmail,
+      };
+
+      final keywords =
+          _generateSearchableKeywords(
+            subject: subject,
+            body: body,
+            from: fromMap,
+          ).toList();
 
       final draftRef = usersCollection
           .doc(userId)
@@ -518,6 +651,7 @@ class FirestoreService {
         'body': body,
         'timestamp': FieldValue.serverTimestamp(),
         'attachments': attachments ?? [],
+        'searchableKeywords': keywords,
       };
 
       await draftRef.update(dataToUpdate);

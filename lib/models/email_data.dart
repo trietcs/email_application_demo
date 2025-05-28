@@ -11,6 +11,7 @@ class EmailData {
   bool isRead;
   final bool isStarred;
   final List<String> labelIds;
+  final List<String> searchableKeywords;
 
   final List<Map<String, String>> to;
   final List<Map<String, String>>? cc;
@@ -30,13 +31,15 @@ class EmailData {
     required this.isRead,
     this.isStarred = false,
     List<String>? labelIds,
+    List<String>? searchableKeywords,
     required this.to,
     this.cc,
     this.bcc,
     required this.folder,
     this.originalFolder,
     this.attachments,
-  }) : this.labelIds = labelIds ?? [];
+  }) : this.labelIds = labelIds ?? [],
+       this.searchableKeywords = searchableKeywords ?? [];
 
   String get senderName => from['displayName'] ?? 'Unknown Sender';
   String get senderUid => from['userId'] ?? '';
@@ -107,6 +110,9 @@ class EmailData {
       isRead: map['isRead'] as bool? ?? false,
       isStarred: map['isStarred'] as bool? ?? false,
       labelIds: List<String>.from(map['labelIds'] as List<dynamic>? ?? []),
+      searchableKeywords: List<String>.from(
+        map['searchableKeywords'] as List<dynamic>? ?? [],
+      ),
       to: parseRecipientList(map['to']),
       cc: parseRecipientList(map['cc']),
       bcc: parseRecipientList(map['bcc']),
@@ -130,12 +136,12 @@ class EmailData {
     return {
       'from': from,
       'subject': subject,
-      'previewText': previewText,
       'body': body,
       'timestamp': FieldValue.serverTimestamp(),
       'isRead': isRead,
       'isStarred': isStarred,
       'labelIds': labelIds,
+      'searchableKeywords': searchableKeywords,
       'to': to,
       'cc': cc,
       'bcc': bcc,
@@ -155,6 +161,7 @@ class EmailData {
     bool? isRead,
     bool? isStarred,
     List<String>? labelIds,
+    List<String>? searchableKeywords,
     List<Map<String, String>>? to,
     List<Map<String, String>>? cc,
     List<Map<String, String>>? bcc,
@@ -166,7 +173,6 @@ class EmailData {
     String? senderEmail,
   }) {
     Map<String, String?> finalFrom = from ?? this.from;
-
     if (senderName != null || senderEmail != null) {
       finalFrom = {
         'displayName': senderName ?? this.from['displayName'],
@@ -188,6 +194,7 @@ class EmailData {
       isRead: isRead ?? this.isRead,
       isStarred: isStarred ?? this.isStarred,
       labelIds: labelIds ?? this.labelIds,
+      searchableKeywords: searchableKeywords ?? this.searchableKeywords,
       to: to ?? this.to,
       cc: cc ?? this.cc,
       bcc: bcc ?? this.bcc,

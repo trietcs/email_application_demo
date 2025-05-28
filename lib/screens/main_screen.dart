@@ -14,6 +14,7 @@ import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:email_application/screens/search/email_search_delegate.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -257,6 +258,18 @@ class _MainScreenState extends State<MainScreen> {
                 onPressed: () => Scaffold.of(context).openDrawer(),
               ),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.search, color: AppColors.primary, size: 28),
+            tooltip: 'Search Emails',
+            onPressed: () {
+              showSearch(
+                context: context,
+                delegate: EmailSearchDelegate(userId: _currentUser!.uid),
+              );
+            },
+          ),
+        ],
       ),
       drawer: Drawer(
         child: Container(
