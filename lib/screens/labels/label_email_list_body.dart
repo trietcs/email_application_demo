@@ -23,23 +23,23 @@ class LabelEmailListBody extends StatefulWidget {
 
 class _LabelEmailListBodyState extends State<LabelEmailListBody> {
   User? _currentUser;
-  Future<List<EmailData>>? _emailsFuture;
+  Stream<List<EmailData>>? _emailsStream;
   List<LabelData> _allUserLabels = [];
-  bool _isLoadingInitialData = true;
+  bool _isLoadingLabels = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
-    _loadInitialScreenData();
+    _initializeData();
   }
 
   @override
   void didUpdateWidget(LabelEmailListBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.label.id != oldWidget.label.id) {
-      _loadInitialScreenData();
+      _initializeData();
     }
   }
 
@@ -50,22 +50,22 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
     final newUser = authService.currentUser;
     if (newUser != _currentUser) {
       _currentUser = newUser;
-      _loadInitialScreenData();
+      _initializeData();
     }
   }
 
-  Future<void> _loadInitialScreenData() async {
+  Future<void> _initializeData() async {
     if (!mounted) return;
     setState(() {
-      _isLoadingInitialData = true;
+      _isLoadingLabels = true;
       _error = null;
+      _emailsStream = null;
     });
 
     if (_currentUser == null) {
       if (mounted) {
         setState(() {
-          _isLoadingInitialData = false;
-          _emailsFuture = Future.value([]);
+          _isLoadingLabels = false;
         });
       }
       return;
@@ -73,18 +73,17 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
 
     try {
       await _fetchUserLabels();
-      _loadEmailsForLabel();
+      await _setupEmailStream();
       if (mounted) {
         setState(() {
-          _isLoadingInitialData = false;
+          _isLoadingLabels = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = e.toString();
-          _isLoadingInitialData = false;
-          _emailsFuture = Future.value([]);
+          _isLoadingLabels = false;
         });
       }
     }
@@ -112,37 +111,19 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
     }
   }
 
-  Future<void> _loadEmailsForLabel() async {
+  Future<void> _setupEmailStream() async {
     if (_currentUser != null && mounted) {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
       setState(() {
-        _emailsFuture = _fetchEmailsByLabelFromService(
+        _emailsStream = firestoreService.getEmailsByLabelStream(
           _currentUser!.uid,
           widget.label.id,
         );
       });
-    } else if (mounted) {
-      setState(() {
-        _emailsFuture = Future.value([]);
-      });
     }
-  }
-
-  Future<List<EmailData>> _fetchEmailsByLabelFromService(
-    String userId,
-    String labelId,
-  ) async {
-    final firestoreService = Provider.of<FirestoreService>(
-      context,
-      listen: false,
-    );
-    final List<Map<String, dynamic>> emailsDataMap = await firestoreService
-        .getEmailsByLabel(userId, labelId);
-
-    if (!mounted) return [];
-
-    return emailsDataMap
-        .map((map) => EmailData.fromMap(map, map['id'] as String? ?? ''))
-        .toList();
   }
 
   Future<void> _handleEmailTap(EmailData email) async {
@@ -169,8 +150,6 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
     if (resultFromNextScreen == true ||
         resultFromNextScreen == false ||
         (resultFromNextScreen == null && mounted)) {
-      _loadInitialScreenData();
-    } else {
       final firestoreService = Provider.of<FirestoreService>(
         context,
         listen: false,
@@ -184,17 +163,13 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
                 .get();
         if (mounted) {
           if (!doc.exists) {
-            _loadInitialScreenData();
           } else {
             final updatedEmailData = EmailData.fromMap(doc.data()!, doc.id);
-            if (!updatedEmailData.labelIds.contains(widget.label.id)) {
-              _loadInitialScreenData();
-            }
+            if (!updatedEmailData.labelIds.contains(widget.label.id)) {}
           }
         }
       } catch (e) {
         print("Error checking email status after pop from next screen: $e");
-        if (mounted) _loadInitialScreenData();
       }
     }
   }
@@ -202,27 +177,23 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _loadInitialScreenData,
+      onRefresh: _initializeData,
       color: AppColors.primary,
       child: Builder(
         builder: (context) {
-          if (_isLoadingInitialData && _emailsFuture == null) {
+          if (_isLoadingLabels) {
             return Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             );
           }
-          if (_error != null && _emailsFuture == null) {
-            return EmailListErrorView(
-              error: _error!,
-              onRetry: _loadInitialScreenData,
-            );
+          if (_error != null) {
+            return EmailListErrorView(error: _error!, onRetry: _initializeData);
           }
 
-          return FutureBuilder<List<EmailData>>(
-            future: _emailsFuture,
+          return StreamBuilder<List<EmailData>>(
+            stream: _emailsStream,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting ||
-                  (_isLoadingInitialData && _emailsFuture != null)) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
                 );
@@ -230,19 +201,11 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
 
               if (snapshot.hasError) {
                 print(
-                  'LabelEmailListBody Email FutureBuilder Error: ${snapshot.error}',
+                  'LabelEmailListBody Email StreamBuilder Error: ${snapshot.error}',
                 );
                 return EmailListErrorView(
                   error: snapshot.error!,
-                  onRetry: _loadEmailsForLabel,
-                );
-              }
-
-              if (_error != null &&
-                  (snapshot.data == null || snapshot.data!.isEmpty)) {
-                return EmailListErrorView(
-                  error: _error!,
-                  onRetry: _loadInitialScreenData,
+                  onRetry: _setupEmailStream,
                 );
               }
 
@@ -263,13 +226,18 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
                               color: Colors.grey.shade400,
                             ),
                             const SizedBox(height: 16),
-                            Text(
-                              "No emails found with the label \"${widget.label.name}\".",
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey.shade600,
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24.0,
                               ),
-                              textAlign: TextAlign.center,
+                              child: Text(
+                                "No emails found with the label \"${widget.label.name}\".",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           ],
                         ),
@@ -294,9 +262,9 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
                     currentScreenFolder: itemDisplayContextFolder,
                     allUserLabels: _allUserLabels,
                     onTap: () => _handleEmailTap(email),
-                    onReadStatusChanged: _loadInitialScreenData,
-                    onDeleteOrMove: _loadInitialScreenData,
-                    onStarStatusChanged: _loadInitialScreenData,
+                    onReadStatusChanged: null,
+                    onDeleteOrMove: null,
+                    onStarStatusChanged: null,
                   );
                 },
               );

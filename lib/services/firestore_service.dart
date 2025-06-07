@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:email_application/models/email_data.dart';
 import 'package:email_application/models/email_folder.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:email_application/models/label_data.dart';
@@ -7,30 +8,67 @@ import 'package:flutter/material.dart';
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   CollectionReference get usersCollection => _db.collection('users');
-
-  Set<String> _generateSearchableKeywords({
-    required String subject,
-    required String body,
-    Map<String, String?>? from,
-  }) {
-    final Set<String> keywords = {};
-    final RegExp wordRegex = RegExp(r"\b\w+\b");
-
-    void addTextToKeywords(String? text) {
-      if (text == null || text.isEmpty) return;
-      wordRegex.allMatches(text.toLowerCase()).forEach((match) {
-        if (match.group(0) != null && match.group(0)!.length > 2) {
-          keywords.add(match.group(0)!);
-        }
+  Stream<List<EmailData>> getEmailsStream(String userId, EmailFolder folder) {
+    try {
+      Query query = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .where('folder', isEqualTo: folder.folderName)
+          .orderBy('timestamp', descending: true);
+      return query.snapshots().map((snapshot) {
+        return snapshot.docs.map((doc) {
+          return EmailData.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        }).toList();
       });
+    } catch (e) {
+      print(
+        'Error while retrieving email stream for folder ${folder.folderName}: $e',
+      );
+      return Stream.error(e);
     }
+  }
 
-    addTextToKeywords(subject);
-    addTextToKeywords(body);
-    from?.forEach((key, value) {
-      addTextToKeywords(value);
-    });
-    return keywords;
+  Stream<List<EmailData>> getStarredEmailsStream(String userId) {
+    try {
+      final query = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .where('isStarred', isEqualTo: true)
+          .orderBy('timestamp', descending: true);
+
+      return query.snapshots().map((snapshot) {
+        return snapshot.docs
+            .map((doc) => EmailData.fromMap(doc.data(), doc.id))
+            .toList();
+      });
+    } catch (e) {
+      print('Error while retrieving starred email stream for user $userId: $e');
+      return Stream.error(e);
+    }
+  }
+
+  Stream<List<EmailData>> getEmailsByLabelStream(
+    String userId,
+    String labelId,
+  ) {
+    try {
+      final query = usersCollection
+          .doc(userId)
+          .collection('userEmails')
+          .where('labelIds', arrayContains: labelId)
+          .orderBy('timestamp', descending: true);
+
+      return query.snapshots().map((snapshot) {
+        return snapshot.docs
+            .map((doc) => EmailData.fromMap(doc.data(), doc.id))
+            .toList();
+      });
+    } catch (e) {
+      print(
+        'Error when retrieving email stream by label $labelId for user $userId: $e',
+      );
+      return Stream.error(e);
+    }
   }
 
   Future<List<Map<String, dynamic>>> searchEmailsBasic(
@@ -310,6 +348,31 @@ class FirestoreService {
       print('Error getting emails for folder ${folder.folderName}: $e');
       return [];
     }
+  }
+
+  Set<String> _generateSearchableKeywords({
+    required String subject,
+    required String body,
+    Map<String, String?>? from,
+  }) {
+    final Set<String> keywords = {};
+    final RegExp wordRegex = RegExp(r"\b\w+\b");
+
+    void addTextToKeywords(String? text) {
+      if (text == null || text.isEmpty) return;
+      wordRegex.allMatches(text.toLowerCase()).forEach((match) {
+        if (match.group(0) != null && match.group(0)!.length > 2) {
+          keywords.add(match.group(0)!);
+        }
+      });
+    }
+
+    addTextToKeywords(subject);
+    addTextToKeywords(body);
+    from?.forEach((key, value) {
+      addTextToKeywords(value);
+    });
+    return keywords;
   }
 
   Future<void> sendEmail({

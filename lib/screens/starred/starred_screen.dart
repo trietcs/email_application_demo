@@ -21,16 +21,16 @@ class StarredScreen extends StatefulWidget {
 
 class _StarredScreenState extends State<StarredScreen> {
   User? _currentUser;
-  bool _isLoading = true;
-  List<EmailData> _starredEmails = [];
+  Stream<List<EmailData>>? _emailsStream;
   List<LabelData> _userLabels = [];
+  bool _isLoadingLabels = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
-    _loadInitialData();
+    _initializeData();
   }
 
   @override
@@ -41,22 +41,22 @@ class _StarredScreenState extends State<StarredScreen> {
 
     if (newUser != _currentUser) {
       _currentUser = newUser;
-      _loadInitialData();
+      _initializeData();
     }
   }
 
-  Future<void> _loadInitialData() async {
+  Future<void> _initializeData() async {
     if (!mounted) return;
     setState(() {
-      _isLoading = true;
+      _isLoadingLabels = true;
       _error = null;
+      _emailsStream = null;
     });
 
     if (_currentUser == null) {
       if (mounted) {
         setState(() {
-          _isLoading = false;
-          _starredEmails = [];
+          _isLoadingLabels = false;
         });
       }
       return;
@@ -64,19 +64,18 @@ class _StarredScreenState extends State<StarredScreen> {
 
     try {
       await _fetchUserLabels();
-      await _loadStarredEmails();
+      await _setupEmailStream();
 
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _isLoadingLabels = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = e.toString();
-          _isLoading = false;
-          _starredEmails = [];
+          _isLoadingLabels = false;
         });
       }
     }
@@ -104,34 +103,17 @@ class _StarredScreenState extends State<StarredScreen> {
     }
   }
 
-  Future<void> _loadStarredEmails() async {
-    if (_currentUser == null || !mounted) {
-      if (mounted) _starredEmails = [];
-      return;
-    }
-    try {
+  Future<void> _setupEmailStream() async {
+    if (_currentUser != null && mounted) {
       final firestoreService = Provider.of<FirestoreService>(
         context,
         listen: false,
       );
-      final List<Map<String, dynamic>> flatRawEmailList = await firestoreService
-          .getStarredEmails(_currentUser!.uid);
-
-      if (!mounted) return;
-
-      List<EmailData> loadedEmails =
-          flatRawEmailList.map((rawEmail) {
-            return EmailData.fromMap(rawEmail, rawEmail['id'] as String? ?? '');
-          }).toList();
-
-      if (mounted) {
-        _starredEmails = loadedEmails;
-      }
-    } catch (e) {
-      if (mounted) {
-        print('StarredScreen _loadStarredEmails Error: $e');
-      }
-      throw e;
+      setState(() {
+        _emailsStream = firestoreService.getStarredEmailsStream(
+          _currentUser!.uid,
+        );
+      });
     }
   }
 
@@ -156,9 +138,9 @@ class _StarredScreenState extends State<StarredScreen> {
       );
     }
 
-    if (resultFromNextScreen == true) {
-      _loadInitialData();
-    } else {
+    if (resultFromNextScreen == true ||
+        resultFromNextScreen == false ||
+        resultFromNextScreen == null && mounted) {
       final firestoreService = Provider.of<FirestoreService>(
         context,
         listen: false,
@@ -171,15 +153,10 @@ class _StarredScreenState extends State<StarredScreen> {
                 .doc(email.id)
                 .get();
         if (mounted) {
-          if (!doc.exists || !(doc.data()?['isStarred'] ?? false)) {
-            _loadInitialData();
-          }
+          if (!doc.exists || !(doc.data()?['isStarred'] ?? false)) {}
         }
       } catch (e) {
         print("StarredScreen: Error checking email status after pop: $e");
-        if (mounted) {
-          _loadInitialData();
-        }
       }
     }
   }
@@ -194,11 +171,11 @@ class _StarredScreenState extends State<StarredScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _loadInitialData,
+        onRefresh: _initializeData,
         color: AppColors.primary,
         child: Builder(
           builder: (context) {
-            if (_isLoading) {
+            if (_isLoadingLabels) {
               return Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               );
@@ -207,52 +184,72 @@ class _StarredScreenState extends State<StarredScreen> {
             if (_error != null) {
               return EmailListErrorView(
                 error: _error!,
-                onRetry: _loadInitialData,
+                onRetry: _initializeData,
               );
             }
 
-            if (_starredEmails.isEmpty) {
-              return CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.star_outline_rounded,
-                            size: 60,
-                            color: Colors.grey.shade400,
+            return StreamBuilder<List<EmailData>>(
+              stream: _emailsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return EmailListErrorView(
+                    error: snapshot.error!,
+                    onRetry: _setupEmailStream,
+                  );
+                }
+
+                final starredEmails = snapshot.data ?? [];
+
+                if (starredEmails.isEmpty) {
+                  return CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverFillRemaining(
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.star_outline_rounded,
+                                size: 60,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No starred emails yet!',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No starred emails yet!',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              );
-            }
+                    ],
+                  );
+                }
 
-            return ListView.builder(
-              itemCount: _starredEmails.length,
-              itemBuilder: (context, index) {
-                final email = _starredEmails[index];
-                return EmailListItem(
-                  email: email,
-                  currentScreenFolder: email.folder,
-                  allUserLabels: _userLabels,
-                  onTap: () => _handleEmailTap(email),
-                  onReadStatusChanged: _loadInitialData,
-                  onDeleteOrMove: _loadInitialData,
-                  onStarStatusChanged: _loadInitialData,
+                return ListView.builder(
+                  itemCount: starredEmails.length,
+                  itemBuilder: (context, index) {
+                    final email = starredEmails[index];
+                    return EmailListItem(
+                      email: email,
+                      currentScreenFolder: email.folder,
+                      allUserLabels: _userLabels,
+                      onTap: () => _handleEmailTap(email),
+                      onReadStatusChanged: null,
+                      onDeleteOrMove: null,
+                      onStarStatusChanged: null,
+                    );
+                  },
                 );
               },
             );

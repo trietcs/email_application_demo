@@ -19,16 +19,16 @@ class InboxScreen extends StatefulWidget {
 
 class _InboxScreenState extends State<InboxScreen> {
   User? _currentUser;
-  Future<List<EmailData>>? _emailsFuture;
+  Stream<List<EmailData>>? _emailsStream;
   List<LabelData> _userLabels = [];
-  bool _isLoadingInitialData = true;
+  bool _isLoadingLabels = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
-    _loadInitialScreenData();
+    _initializeData();
   }
 
   @override
@@ -38,35 +38,37 @@ class _InboxScreenState extends State<InboxScreen> {
     final newUser = authService.currentUser;
     if (newUser != _currentUser) {
       _currentUser = newUser;
-      _loadInitialScreenData();
+      _initializeData();
     }
   }
 
-  Future<void> _loadInitialScreenData() async {
+  Future<void> _initializeData() async {
     if (!mounted) return;
+
     setState(() {
-      _isLoadingInitialData = true;
+      _isLoadingLabels = true;
       _error = null;
+      _emailsStream = null;
     });
 
     if (_currentUser == null) {
-      if (mounted) setState(() => _isLoadingInitialData = false);
+      if (mounted) setState(() => _isLoadingLabels = false);
       return;
     }
 
     try {
       await _fetchUserLabels();
-      _loadEmails();
+      await _setupEmailStream();
       if (mounted) {
         setState(() {
-          _isLoadingInitialData = false;
+          _isLoadingLabels = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = e.toString();
-          _isLoadingInitialData = false;
+          _isLoadingLabels = false;
         });
       }
     }
@@ -95,50 +97,29 @@ class _InboxScreenState extends State<InboxScreen> {
     }
   }
 
-  Future<void> _loadEmails() async {
+  Future<void> _setupEmailStream() async {
     if (_currentUser != null && mounted) {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
       setState(() {
-        _emailsFuture = _fetchEmailsFromService(
+        _emailsStream = firestoreService.getEmailsStream(
           _currentUser!.uid,
           EmailFolder.inbox,
         );
       });
-    } else if (mounted) {
-      setState(() {
-        _emailsFuture = Future.value([]);
-      });
     }
-  }
-
-  Future<List<EmailData>> _fetchEmailsFromService(
-    String userId,
-    EmailFolder folder,
-  ) async {
-    final firestoreService = Provider.of<FirestoreService>(
-      context,
-      listen: false,
-    );
-    final List<Map<String, dynamic>> emailsDataMap = await firestoreService
-        .getEmails(userId, folder);
-
-    if (!mounted) return [];
-
-    return emailsDataMap
-        .map((map) => EmailData.fromMap(map, map['id'] as String? ?? ''))
-        .toList();
   }
 
   Future<void> _handleEmailTap(EmailData email) async {
     if (_currentUser == null || !mounted) return;
-    final resultFromView = await Navigator.push(
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ViewEmailScreen(emailData: email),
       ),
     );
-    if (resultFromView == true) {
-      _loadInitialScreenData();
-    }
   }
 
   @override
@@ -151,57 +132,53 @@ class _InboxScreenState extends State<InboxScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _loadInitialScreenData,
+        onRefresh: _initializeData,
         color: AppColors.primary,
         child: Builder(
           builder: (context) {
-            if (_isLoadingInitialData && _emailsFuture == null) {
+            if (_isLoadingLabels) {
               return Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               );
             }
-            if (_error != null && _emailsFuture == null) {
+
+            if (_error != null) {
               return EmailListErrorView(
                 error: _error!,
-                onRetry: _loadInitialScreenData,
+                onRetry: _initializeData,
               );
             }
 
-            return FutureBuilder<List<EmailData>>(
-              future: _emailsFuture,
+            return StreamBuilder<List<EmailData>>(
+              stream: _emailsStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   );
                 }
+
                 if (snapshot.hasError) {
                   print(
-                    'InboxScreen Email FutureBuilder Error: ${snapshot.error}',
+                    'InboxScreen Email StreamBuilder Error: ${snapshot.error}',
                   );
                   return EmailListErrorView(
                     error: snapshot.error!,
-                    onRetry: _loadEmails,
-                  );
-                }
-                if (_error != null &&
-                    (snapshot.data == null || snapshot.data!.isEmpty)) {
-                  return EmailListErrorView(
-                    error: _error!,
-                    onRetry: _loadInitialScreenData,
+                    onRetry: _setupEmailStream,
                   );
                 }
 
                 final emails = snapshot.data ?? [];
+
                 return EmailListView(
                   emails: emails,
                   currentScreenFolder: EmailFolder.inbox,
                   allUserLabels: _userLabels,
                   onEmailTap: _handleEmailTap,
-                  onRefresh: _loadInitialScreenData,
-                  onReadStatusChanged: _loadInitialScreenData,
-                  onDeleteOrMove: _loadInitialScreenData,
-                  onStarStatusChanged: _loadInitialScreenData,
+                  onRefresh: _initializeData,
+                  onReadStatusChanged: null,
+                  onDeleteOrMove: null,
+                  onStarStatusChanged: null,
                   emptyListMessage: "Your inbox is sparkling clean!",
                   emptyListIcon: Icons.inbox_outlined,
                 );

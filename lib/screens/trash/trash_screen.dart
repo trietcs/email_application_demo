@@ -20,16 +20,16 @@ class TrashScreen extends StatefulWidget {
 
 class _TrashScreenState extends State<TrashScreen> {
   User? _currentUser;
-  Future<List<EmailData>>? _emailsFuture;
+  Stream<List<EmailData>>? _emailsStream;
   List<LabelData> _userLabels = [];
-  bool _isLoadingInitialData = true;
+  bool _isLoadingLabels = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
-    _loadInitialScreenData();
+    _initializeData();
   }
 
   @override
@@ -39,41 +39,38 @@ class _TrashScreenState extends State<TrashScreen> {
     final newUser = authService.currentUser;
     if (newUser != _currentUser) {
       _currentUser = newUser;
-      _loadInitialScreenData();
+      _initializeData();
     }
   }
 
-  Future<void> _loadInitialScreenData() async {
+  Future<void> _initializeData() async {
     if (!mounted) return;
     setState(() {
-      _isLoadingInitialData = true;
+      _isLoadingLabels = true;
       _error = null;
+      _emailsStream = null;
     });
 
     if (_currentUser == null) {
       if (mounted) {
-        setState(() {
-          _isLoadingInitialData = false;
-          _emailsFuture = Future.value([]);
-        });
+        setState(() => _isLoadingLabels = false);
       }
       return;
     }
 
     try {
       await _fetchUserLabels();
-      _loadEmails();
+      await _setupEmailStream();
       if (mounted) {
         setState(() {
-          _isLoadingInitialData = false;
+          _isLoadingLabels = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = e.toString();
-          _isLoadingInitialData = false;
-          _emailsFuture = Future.value([]);
+          _isLoadingLabels = false;
         });
       }
     }
@@ -101,45 +98,25 @@ class _TrashScreenState extends State<TrashScreen> {
     }
   }
 
-  Future<void> _loadEmails() async {
+  Future<void> _setupEmailStream() async {
     if (_currentUser != null && mounted) {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
       setState(() {
-        _emailsFuture = _fetchEmailsFromService(
+        _emailsStream = firestoreService.getEmailsStream(
           _currentUser!.uid,
           EmailFolder.trash,
         );
       });
-    } else if (mounted) {
-      setState(() {
-        _emailsFuture = Future.value([]);
-      });
     }
-  }
-
-  Future<List<EmailData>> _fetchEmailsFromService(
-    String userId,
-    EmailFolder folder,
-  ) async {
-    final firestoreService = Provider.of<FirestoreService>(
-      context,
-      listen: false,
-    );
-    final List<Map<String, dynamic>> emailsDataMap = await firestoreService
-        .getEmails(userId, folder);
-    if (!mounted) return [];
-    return emailsDataMap
-        .map(
-          (emailMap) =>
-              EmailData.fromMap(emailMap, emailMap['id'] as String? ?? ''),
-        )
-        .toList();
   }
 
   Future<void> _handleEmailTap(EmailData email) async {
     if (_currentUser == null || !mounted) return;
 
     final bool wasOriginallyDraft = email.originalFolder == EmailFolder.drafts;
-
     dynamic resultFromNextScreen;
 
     if (wasOriginallyDraft) {
@@ -164,7 +141,7 @@ class _TrashScreenState extends State<TrashScreen> {
     if (resultFromNextScreen == true ||
         resultFromNextScreen == false ||
         resultFromNextScreen == null && mounted) {
-      _loadInitialScreenData();
+      _initializeData();
     }
   }
 
@@ -177,24 +154,24 @@ class _TrashScreenState extends State<TrashScreen> {
     }
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _loadInitialScreenData,
+        onRefresh: _initializeData,
         color: AppColors.primary,
         child: Builder(
           builder: (context) {
-            if (_isLoadingInitialData && _emailsFuture == null) {
+            if (_isLoadingLabels) {
               return Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               );
             }
-            if (_error != null && _emailsFuture == null) {
+            if (_error != null) {
               return EmailListErrorView(
                 error: _error!,
-                onRetry: _loadInitialScreenData,
+                onRetry: _initializeData,
               );
             }
 
-            return FutureBuilder<List<EmailData>>(
-              future: _emailsFuture,
+            return StreamBuilder<List<EmailData>>(
+              stream: _emailsStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
@@ -203,18 +180,11 @@ class _TrashScreenState extends State<TrashScreen> {
                 }
                 if (snapshot.hasError) {
                   print(
-                    'TrashScreen Email FutureBuilder Error: ${snapshot.error}',
+                    'TrashScreen Email StreamBuilder Error: ${snapshot.error}',
                   );
                   return EmailListErrorView(
                     error: snapshot.error!,
-                    onRetry: _loadEmails,
-                  );
-                }
-                if (_error != null &&
-                    (snapshot.data == null || snapshot.data!.isEmpty)) {
-                  return EmailListErrorView(
-                    error: _error!,
-                    onRetry: _loadInitialScreenData,
+                    onRetry: _setupEmailStream,
                   );
                 }
 
@@ -224,10 +194,10 @@ class _TrashScreenState extends State<TrashScreen> {
                   currentScreenFolder: EmailFolder.trash,
                   allUserLabels: _userLabels,
                   onEmailTap: _handleEmailTap,
-                  onRefresh: _loadInitialScreenData,
-                  onReadStatusChanged: _loadInitialScreenData,
-                  onDeleteOrMove: _loadInitialScreenData,
-                  onStarStatusChanged: _loadInitialScreenData,
+                  onRefresh: _initializeData,
+                  onReadStatusChanged: null,
+                  onDeleteOrMove: null,
+                  onStarStatusChanged: null,
                   emptyListMessage: "No emails in your trash.",
                   emptyListIcon: Icons.delete_sweep_outlined,
                 );
