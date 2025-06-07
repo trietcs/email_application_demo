@@ -79,7 +79,9 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi tải thông tin hồ sơ: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error loading profile information: ${e.toString()}'),
+          ),
         );
       }
     }
@@ -153,7 +155,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cập nhật thông tin thành công!')),
+          const SnackBar(content: Text('Information updated successfully!')),
         );
         setState(() {
           _isEditing = false;
@@ -164,7 +166,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi cập nhật: ${e.toString()}')),
+          SnackBar(content: Text('Update error: ${e.toString()}')),
         );
         setState(() => _isLoading = false);
       }
@@ -185,7 +187,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
           const Spacer(),
           Expanded(
             child: Text(
-              value ?? 'Chưa cập nhật',
+              value ?? 'Not updated yet',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
@@ -201,7 +203,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Thông tin cá nhân',
+          'Personal information',
           style: TextStyle(
             color: AppColors.appBarForeground,
             fontWeight: FontWeight.bold,
@@ -217,7 +219,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                 if (mounted) setState(() => _isEditing = true);
               },
               child: Text(
-                'Chỉnh sửa',
+                'Edit',
                 style: TextStyle(color: AppColors.primary, fontSize: 16),
               ),
             ),
@@ -230,7 +232,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                 }
               },
               child: Text(
-                'Hủy',
+                'Cancel',
                 style: TextStyle(color: AppColors.secondaryText, fontSize: 16),
               ),
             ),
@@ -286,24 +288,24 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                         TextFormField(
                           controller: _displayNameController,
                           decoration: _themedInputDecoration(
-                            'Tên hiển thị',
+                            'Display name',
                             Icons.person_rounded,
                             true,
                           ),
                           validator:
                               (value) =>
                                   value == null || value.isEmpty
-                                      ? 'Vui lòng nhập tên.'
+                                      ? 'Please enter name.'
                                       : null,
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _dobController,
                           decoration: _themedInputDecoration(
-                            'Ngày sinh',
+                            'Date of birth',
                             Icons.calendar_today_rounded,
                             true,
-                          ).copyWith(hintText: 'Chạm để chọn ngày'),
+                          ).copyWith(hintText: 'Tap to select date'),
                           readOnly: true,
                           onTap: () async {
                             FocusScope.of(context).requestFocus(FocusNode());
@@ -352,7 +354,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                           validator:
                               (value) =>
                                   _selectedDateOfBirth == null
-                                      ? 'Vui lòng chọn ngày sinh.'
+                                      ? 'Please select date of birth.'
                                       : null,
                         ),
                         const SizedBox(height: 16),
@@ -364,7 +366,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                             bottom: 0,
                           ),
                           child: Text(
-                            'Giới tính',
+                            'Gender',
                             style: TextStyle(
                               color: AppColors.secondaryText,
                               fontSize: 12,
@@ -375,8 +377,8 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                           children: [
                             Expanded(
                               child: RadioListTile<String>(
-                                title: const Text('Nam'),
-                                value: 'Nam',
+                                title: const Text('Male'),
+                                value: 'Male',
                                 groupValue: _selectedGender,
                                 onChanged:
                                     (value) =>
@@ -386,8 +388,8 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                             ),
                             Expanded(
                               child: RadioListTile<String>(
-                                title: const Text('Nữ'),
-                                value: 'Nữ',
+                                title: const Text('Female'),
+                                value: 'Female',
                                 groupValue: _selectedGender,
                                 onChanged:
                                     (value) =>
@@ -403,7 +405,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                           Padding(
                             padding: const EdgeInsets.only(left: 16.0, top: 0),
                             child: Text(
-                              'Vui lòng chọn giới tính.',
+                              'Please select gender.',
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.error,
                                 fontSize: 12,
@@ -436,31 +438,31 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                                       strokeWidth: 3,
                                     ),
                                   )
-                                  : const Text('Lưu'),
+                                  : const Text('Save'),
                         ),
                       ] else ...[
                         _buildDisplayItem(
                           Icons.person_outline_rounded,
-                          "Tên",
+                          "Name",
                           _displayNameController.text.isNotEmpty
                               ? _displayNameController.text
-                              : 'Chưa cập nhật',
+                              : 'Not updated yet',
                         ),
                         const Divider(),
                         _buildDisplayItem(
                           Icons.cake_outlined,
-                          "Ngày sinh",
+                          "Date of birth",
                           _selectedDateOfBirth != null
                               ? DateFormat(
                                 'dd/MM/yyyy',
                               ).format(_selectedDateOfBirth!)
-                              : 'Chưa cập nhật',
+                              : 'Not updated yet',
                         ),
                         const Divider(),
                         _buildDisplayItem(
                           Icons.wc_outlined,
-                          "Giới tính",
-                          _selectedGender ?? 'Chưa cập nhật',
+                          "Gender",
+                          _selectedGender ?? 'Not updated yet',
                         ),
                       ],
                     ],

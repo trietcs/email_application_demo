@@ -767,7 +767,6 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
 
               const SizedBox(height: 40),
               ElevatedButton.icon(
-                icon: const Icon(Icons.logout),
                 label: const Text('Logout'),
                 onPressed: _logout,
                 style: ElevatedButton.styleFrom(
