@@ -8,7 +8,6 @@ import 'package:email_application/widgets/email_list_view.dart';
 import 'package:email_application/widgets/email_list_item.dart';
 import 'package:email_application/screens/emails/view_email_screen.dart';
 import 'package:email_application/screens/compose/compose_email_screen.dart';
-import 'package:email_application/config/app_colors.dart';
 
 class SearchResultPayload {
   final List<EmailData> emails;
@@ -44,25 +43,13 @@ class EmailSearchDelegate extends SearchDelegate<String?> {
   ThemeData appBarTheme(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     return theme.copyWith(
-      primaryColor: AppColors.appBarBackground,
-      appBarTheme: theme.appBarTheme.copyWith(
-        backgroundColor: AppColors.appBarBackground,
-        elevation: 1.0,
-        iconTheme: IconThemeData(color: AppColors.primary),
-        titleTextStyle: TextStyle(
-          color: AppColors.appBarForeground,
-          fontSize: 18,
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        hintStyle: TextStyle(color: AppColors.secondaryText.withOpacity(0.7)),
+      inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+        hintStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
         border: InputBorder.none,
       ),
       textTheme: theme.textTheme.copyWith(
-        titleLarge: TextStyle(
-          color: AppColors.appBarForeground,
-          fontSize: 18,
-          fontWeight: FontWeight.normal,
+        titleLarge: theme.textTheme.titleLarge?.copyWith(
+          color: theme.colorScheme.onSurface,
         ),
       ),
     );
@@ -161,6 +148,7 @@ class EmailSearchDelegate extends SearchDelegate<String?> {
     _delegateBuildContext = context;
     if (!_isActive) return const SizedBox.shrink();
 
+    final theme = Theme.of(context);
     final firestoreService = Provider.of<FirestoreService>(
       context,
       listen: false,
@@ -168,15 +156,21 @@ class EmailSearchDelegate extends SearchDelegate<String?> {
     final String currentQuery = query.trim();
 
     if (currentQuery.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_outlined, size: 80, color: Colors.grey),
-            SizedBox(height: 16),
+            Icon(
+              Icons.search_outlined,
+              size: 80,
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
             Text(
               "Search emails by subject, body, or people.",
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.textTheme.bodyMedium?.color,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -209,7 +203,9 @@ class EmailSearchDelegate extends SearchDelegate<String?> {
         if (!_isActive) return const SizedBox.shrink();
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(
+            child: CircularProgressIndicator(color: theme.primaryColor),
+          );
         }
         if (snapshot.hasError) {
           return EmailListErrorView(
@@ -257,9 +253,9 @@ class EmailSearchDelegate extends SearchDelegate<String?> {
                 leading: const Icon(Icons.manage_search_outlined),
                 title: Text(
                   "See all results for \"$currentQuery\"",
-                  style: TextStyle(color: AppColors.primary),
+                  style: TextStyle(color: theme.primaryColor),
                 ),
-                onTap: () => _tryRefreshResults(),
+                onTap: () => showResults(context),
               );
             }
 

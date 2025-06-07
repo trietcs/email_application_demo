@@ -1,3 +1,5 @@
+// lib/widgets/email_list_item.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
@@ -33,6 +35,7 @@ class EmailListItem extends StatefulWidget {
 }
 
 class _EmailListItemState extends State<EmailListItem> {
+  // --- Toàn bộ các hàm logic trong State giữ nguyên, không thay đổi ---
   late EmailData _currentEmail;
   String? _nameForAvatarAndInitial;
   String? _photoUrl;
@@ -444,7 +447,7 @@ class _EmailListItemState extends State<EmailListItem> {
 
       if (foundLabel != null) {
         final Color chipBackgroundColor = foundLabel.color.withOpacity(0.18);
-        final Color chipTextColor = Colors.black87;
+        final Color chipTextColor = foundLabel.color.withOpacity(0.9);
         chips.add(
           Padding(
             padding: const EdgeInsets.only(right: 5.0, top: 4.0),
@@ -501,12 +504,10 @@ class _EmailListItemState extends State<EmailListItem> {
     }
 
     List<String> selectedLabelIds = List<String>.from(_currentEmail.labelIds);
-    bool dialogActionPerformed = false;
 
     bool? saved = await showDialog<bool>(
       context: parentContext,
       builder: (BuildContext dialogContext) {
-        bool localChangesMade = false;
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -547,7 +548,6 @@ class _EmailListItemState extends State<EmailListItem> {
                                   } else {
                                     selectedLabelIds.remove(label.id);
                                   }
-                                  localChangesMade = true;
                                 });
                               },
                               secondary: Icon(Icons.label, color: label.color),
@@ -566,9 +566,9 @@ class _EmailListItemState extends State<EmailListItem> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                   ),
-                  child: Text(
+                  child: const Text(
                     'Apply',
-                    style: TextStyle(color: AppColors.onPrimary),
+                    style: TextStyle(color: AppColors.lightOnPrimary),
                   ),
                   onPressed: () {
                     Navigator.of(dialogContext).pop(true);
@@ -618,31 +618,42 @@ class _EmailListItemState extends State<EmailListItem> {
     }
   }
 
+  // =======================================================================
+  // HÀM BUILD ĐÃ ĐƯỢC CẬP NHẬT
+  // =======================================================================
   @override
   Widget build(BuildContext context) {
-    final bool isUnread = !_currentEmail.isRead;
-    final bool isStarred = _currentEmail.isStarred;
+    final theme = Theme.of(context);
+    final isUnread = !_currentEmail.isRead;
+    final isStarred = _currentEmail.isStarred;
 
-    final EmailFolder displayContextFolder =
+    final displayContextFolder =
         (widget.currentScreenFolder == EmailFolder.trash &&
                 _currentEmail.originalFolder != null)
             ? _currentEmail.originalFolder!
             : widget.currentScreenFolder;
 
-    bool isActuallyDraftDisplay = displayContextFolder == EmailFolder.drafts;
+    final isActuallyDraftDisplay = displayContextFolder == EmailFolder.drafts;
 
-    Color displayNameColor =
-        (isUnread && !isActuallyDraftDisplay) ? Colors.black87 : Colors.black54;
-    FontWeight displayNameFontWeight =
-        (isUnread && !isActuallyDraftDisplay)
-            ? FontWeight.bold
-            : FontWeight.normal;
-    FontWeight itemFontWeight =
-        (isUnread && !isActuallyDraftDisplay)
-            ? FontWeight.bold
-            : FontWeight.normal;
-    Color itemTextColor =
-        (isUnread && !isActuallyDraftDisplay) ? Colors.black87 : Colors.black54;
+    final displayNameStyle = theme.textTheme.titleMedium!.copyWith(
+      fontWeight:
+          (isUnread && !isActuallyDraftDisplay)
+              ? FontWeight.bold
+              : FontWeight.normal,
+      color:
+          isActuallyDraftDisplay
+              ? AppColors.error
+              : theme.colorScheme.onSurface,
+    );
+
+    final subjectStyle = theme.textTheme.bodyLarge!.copyWith(
+      fontWeight:
+          (isUnread && !isActuallyDraftDisplay)
+              ? FontWeight.bold
+              : FontWeight.normal,
+    );
+
+    final previewStyle = theme.textTheme.bodyMedium!;
 
     String nameToDisplay = _nameForAvatarAndInitial ?? "Unknown";
     switch (displayContextFolder) {
@@ -657,7 +668,6 @@ class _EmailListItemState extends State<EmailListItem> {
         break;
       case EmailFolder.drafts:
         nameToDisplay = "Draft";
-        displayNameColor = AppColors.error;
         break;
       default:
         nameToDisplay =
@@ -667,7 +677,6 @@ class _EmailListItemState extends State<EmailListItem> {
         if (_currentEmail.originalFolder == EmailFolder.drafts &&
             displayContextFolder == EmailFolder.trash) {
           nameToDisplay = "Draft";
-          displayNameColor = AppColors.error;
         }
         break;
     }
@@ -689,12 +698,125 @@ class _EmailListItemState extends State<EmailListItem> {
       initialLetter = nameToDisplay[0].toUpperCase();
     }
 
+    // --- Thay đổi cấu trúc Widget ở đây ---
+    final emailContent = Container(
+      color:
+          (isUnread && !isActuallyDraftDisplay)
+              ? (theme.brightness == Brightness.light
+                  ? AppColors.lightUnreadBackground
+                  : AppColors.darkUnreadBackground)
+              : theme.scaffoldBackgroundColor,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _isLoadingProfileInfo
+              ? CircleAvatar(
+                backgroundColor: theme.primaryColor.withOpacity(0.1),
+                child: const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+              )
+              : CircleAvatar(
+                key: ValueKey<String?>(_photoUrl ?? _nameForAvatarAndInitial),
+                backgroundColor: theme.primaryColor.withOpacity(0.1),
+                backgroundImage:
+                    (_photoUrl != null && _photoUrl!.isNotEmpty)
+                        ? NetworkImage(_photoUrl!)
+                        : null,
+                child:
+                    (_photoUrl == null || _photoUrl!.isEmpty)
+                        ? Text(
+                          initialLetter,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: theme.primaryColor,
+                          ),
+                        )
+                        : null,
+              ),
+          const SizedBox(width: 12.0),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nameToDisplay,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: displayNameStyle,
+                ),
+                const SizedBox(height: 2.0),
+                Text(
+                  _currentEmail.subject.isNotEmpty
+                      ? _currentEmail.subject
+                      : '(No Subject)',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: subjectStyle,
+                ),
+                const SizedBox(height: 2.0),
+                Text(
+                  _currentEmail.previewText.isNotEmpty
+                      ? _currentEmail.previewText.replaceAll('\n', ' ')
+                      : '(No content)',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: previewStyle,
+                ),
+                _buildLabelChips(),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8.0),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatDateTime(_currentEmail.time),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color:
+                      (isUnread && !isActuallyDraftDisplay)
+                          ? theme.primaryColor
+                          : theme.textTheme.bodyMedium?.color,
+                  fontWeight:
+                      (isUnread && !isActuallyDraftDisplay)
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                ),
+              ),
+              const SizedBox(height: 4),
+              InkResponse(
+                onTap: () => _toggleStarStatus(context),
+                radius: 20,
+                child: Padding(
+                  padding: const EdgeInsets.all(2.0),
+                  child: Icon(
+                    isStarred ? Icons.star : Icons.star_border,
+                    color:
+                        isStarred
+                            ? AppColors.accent
+                            : theme.colorScheme.onSurface.withOpacity(0.4),
+                    size: 22.0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
     return InkWell(
       onTap: widget.onTap,
       onLongPress: () {
         showModalBottomSheet(
           context: context,
-          backgroundColor: Colors.white,
+          backgroundColor: theme.cardColor,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
@@ -709,7 +831,7 @@ class _EmailListItemState extends State<EmailListItem> {
                         color:
                             isStarred
                                 ? AppColors.accent
-                                : AppColors.secondaryIcon,
+                                : theme.colorScheme.onSurface.withOpacity(0.6),
                       ),
                       title: Text(isStarred ? 'Unstar email' : 'Star email'),
                       onTap: () async {
@@ -718,9 +840,9 @@ class _EmailListItemState extends State<EmailListItem> {
                       },
                     ),
                     ListTile(
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.label_outline_rounded,
-                        color: AppColors.secondaryIcon,
+                        color: theme.colorScheme.onSurface.withOpacity(0.6),
                       ),
                       title: const Text('Label'),
                       onTap: () {
@@ -738,8 +860,8 @@ class _EmailListItemState extends State<EmailListItem> {
                               : Icons.mark_email_read_outlined,
                           color:
                               _currentEmail.isRead
-                                  ? AppColors.secondaryIcon
-                                  : AppColors.primary,
+                                  ? theme.colorScheme.onSurface.withOpacity(0.6)
+                                  : theme.primaryColor,
                         ),
                         title: Text(
                           _currentEmail.isRead
@@ -754,7 +876,7 @@ class _EmailListItemState extends State<EmailListItem> {
                     ListTile(
                       leading: Icon(
                         Icons.delete_outline_rounded,
-                        color: AppColors.error,
+                        color: theme.colorScheme.error,
                       ),
                       title: Text(
                         widget.currentScreenFolder == EmailFolder.trash
@@ -771,135 +893,15 @@ class _EmailListItemState extends State<EmailListItem> {
               ),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        decoration: BoxDecoration(
-          color:
-              (isUnread && !isActuallyDraftDisplay)
-                  ? AppColors.primary.withOpacity(0.05)
-                  : Colors.transparent,
-          border: Border(
-            bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          emailContent,
+          Padding(
+            padding: const EdgeInsets.only(left: 0.0),
+            child: const Divider(height: 1, thickness: 1),
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _isLoadingProfileInfo
-                ? CircleAvatar(
-                  backgroundColor: Colors.blueGrey[50],
-                  child: const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                )
-                : CircleAvatar(
-                  key: ValueKey<String?>(_photoUrl ?? _nameForAvatarAndInitial),
-                  backgroundColor:
-                      (isUnread && !isActuallyDraftDisplay)
-                          ? AppColors.primary.withOpacity(0.15)
-                          : Colors.blueGrey[100],
-                  backgroundImage:
-                      (_photoUrl != null && _photoUrl!.isNotEmpty)
-                          ? NetworkImage(_photoUrl!)
-                          : null,
-                  child:
-                      (_photoUrl == null || _photoUrl!.isEmpty)
-                          ? Text(
-                            initialLetter,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color:
-                                  (isUnread && !isActuallyDraftDisplay) ||
-                                          isActuallyDraftDisplay
-                                      ? AppColors.primary
-                                      : AppColors.secondaryText,
-                            ),
-                          )
-                          : null,
-                ),
-            const SizedBox(width: 12.0),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    nameToDisplay,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: displayNameFontWeight,
-                      fontSize: 16,
-                      color: displayNameColor,
-                    ),
-                  ),
-                  const SizedBox(height: 2.0),
-                  Text(
-                    _currentEmail.subject.isNotEmpty
-                        ? _currentEmail.subject
-                        : '(No Subject)',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: itemFontWeight,
-                      fontSize: 14,
-                      color: itemTextColor,
-                    ),
-                  ),
-                  const SizedBox(height: 2.0),
-                  Text(
-                    _currentEmail.previewText.isNotEmpty
-                        ? _currentEmail.previewText.replaceAll('\n', ' ')
-                        : '(No content)',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                  _buildLabelChips(),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8.0),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _formatDateTime(_currentEmail.time),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color:
-                        (isUnread && !isActuallyDraftDisplay)
-                            ? AppColors.primary
-                            : Colors.grey[700],
-                    fontWeight:
-                        (isUnread && !isActuallyDraftDisplay)
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                InkResponse(
-                  onTap: () => _toggleStarStatus(context),
-                  radius: 20,
-                  child: Padding(
-                    padding: const EdgeInsets.all(2.0),
-                    child: Icon(
-                      isStarred ? Icons.star : Icons.star_border,
-                      color: isStarred ? AppColors.accent : Colors.grey[400],
-                      size: 22.0,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

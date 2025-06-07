@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:email_application/config/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:mime/mime.dart';
 import 'package:provider/provider.dart';
@@ -526,6 +525,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
   Widget _buildRecipientField({
     required TextEditingController controller,
     required String label,
+    required ThemeData theme,
     FocusNode? focusNode,
   }) {
     return Row(
@@ -539,7 +539,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
           ),
           child: Text(
             label,
-            style: TextStyle(color: AppColors.secondaryText, fontSize: 16),
+            style: theme.textTheme.bodyMedium?.copyWith(fontSize: 16),
           ),
         ),
         Expanded(
@@ -554,7 +554,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
               ),
             ),
             keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(fontSize: 16),
+            style: theme.textTheme.bodyLarge,
           ),
         ),
       ],
@@ -563,6 +563,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final currentUser =
         Provider.of<AuthService>(context, listen: false).currentUser;
 
@@ -584,15 +585,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppColors.appBarBackground,
-        iconTheme: IconThemeData(color: AppColors.primary),
-        title: Text(
-          'Compose Email',
-          style: TextStyle(
-            color: AppColors.appBarForeground,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Compose Email'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           tooltip: 'Save Draft & Close',
@@ -607,23 +600,23 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.onPrimary,
+                  color: theme.colorScheme.onPrimary,
                 ),
               ),
             )
           else ...[
             IconButton(
-              icon: Icon(Icons.attach_file, color: AppColors.primary),
+              icon: const Icon(Icons.attach_file),
               tooltip: 'Attach files',
               onPressed: _pickFiles,
             ),
             IconButton(
-              icon: Icon(Icons.drafts_outlined, color: AppColors.primary),
+              icon: const Icon(Icons.drafts_outlined),
               tooltip: 'Save draft & Close',
               onPressed: () => _handleSaveDraftAndExit(currentUser),
             ),
             IconButton(
-              icon: Icon(Icons.send_outlined, color: AppColors.primary),
+              icon: const Icon(Icons.send_outlined),
               tooltip: 'Send',
               onPressed: () => _sendEmail(currentUser),
             ),
@@ -646,10 +639,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                   children: [
                     Text(
                       fromPrefix,
-                      style: TextStyle(
-                        color: AppColors.secondaryText,
-                        fontSize: 16,
-                      ),
+                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 16),
                     ),
                     const Spacer(),
                     IconButton(
@@ -659,7 +649,7 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                         _showCcBccFields
                             ? Icons.expand_less
                             : Icons.expand_more,
-                        color: AppColors.secondaryIcon,
+                        color: theme.iconTheme.color?.withOpacity(0.7),
                       ),
                       onPressed: () {
                         setState(() {
@@ -670,31 +660,49 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                   ],
                 ),
               ),
-              _buildRecipientField(controller: _toController, label: "To:"),
+              _buildRecipientField(
+                controller: _toController,
+                label: "To:",
+                theme: theme,
+              ),
               if (_showCcBccFields) ...[
-                _buildRecipientField(controller: _ccController, label: "Cc:"),
-                _buildRecipientField(controller: _bccController, label: "Bcc:"),
+                _buildRecipientField(
+                  controller: _ccController,
+                  label: "Cc:",
+                  theme: theme,
+                ),
+                _buildRecipientField(
+                  controller: _bccController,
+                  label: "Bcc:",
+                  theme: theme,
+                ),
               ],
-              const Divider(height: 1, thickness: 0.5),
+              const Divider(height: 1),
 
               TextFormField(
                 controller: _subjectController,
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   hintText: 'Subject',
+                  hintStyle: TextStyle(
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
                   contentPadding: EdgeInsets.symmetric(
                     vertical: _textFieldVerticalPadding,
                     horizontal: 0,
                   ),
                 ),
-                style: const TextStyle(fontSize: 16),
+                style: theme.textTheme.bodyLarge,
               ),
-              const Divider(height: 1, thickness: 0.5),
+              const Divider(height: 1),
               TextFormField(
                 controller: _bodyController,
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   hintText: 'Compose email',
+                  hintStyle: TextStyle(
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
                   contentPadding: EdgeInsets.symmetric(
                     vertical: _textFieldVerticalPadding,
                     horizontal: 0,
@@ -703,16 +711,13 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                 maxLines: null,
                 minLines: 15,
                 keyboardType: TextInputType.multiline,
-                style: const TextStyle(fontSize: 16),
+                style: theme.textTheme.bodyLarge,
               ),
               const SizedBox(height: 16),
               if (_initialAttachmentsFromDraft.isNotEmpty) ...[
                 Text(
                   "Attachments from draft:",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.secondaryText,
-                  ),
+                  style: theme.textTheme.titleSmall,
                 ),
                 Wrap(
                   spacing: 8.0,
@@ -725,28 +730,20 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                       avatar: Icon(
                         Icons.attach_file,
                         size: 16,
-                        color: AppColors.secondaryIcon,
+                        color: theme.chipTheme.labelStyle?.color,
                       ),
-                      label: Text(
-                        attachment['name'] ?? 'file',
-                        style: TextStyle(color: AppColors.secondaryText),
-                      ),
+                      label: Text(attachment['name'] ?? 'file'),
                       onDeleted:
                           () => _removeAttachment(index, isInitial: true),
-                      backgroundColor: Colors.grey.shade200,
+                      backgroundColor: theme.chipTheme.backgroundColor,
+                      labelStyle: theme.chipTheme.labelStyle,
                     );
                   }),
                 ),
                 const SizedBox(height: 8),
               ],
               if (_attachments.isNotEmpty) ...[
-                Text(
-                  "New attachments:",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
+                Text("New attachments:", style: theme.textTheme.titleSmall),
                 Wrap(
                   spacing: 8.0,
                   runSpacing: 4.0,
@@ -756,14 +753,12 @@ class _ComposeEmailScreenState extends State<ComposeEmailScreen> {
                       avatar: Icon(
                         Icons.attach_file,
                         size: 16,
-                        color: AppColors.secondaryIcon,
+                        color: theme.chipTheme.labelStyle?.color,
                       ),
-                      label: Text(
-                        file.name,
-                        style: TextStyle(color: AppColors.secondaryText),
-                      ),
+                      label: Text(file.name),
                       onDeleted: () => _removeAttachment(index),
-                      backgroundColor: Colors.grey.shade200,
+                      backgroundColor: theme.chipTheme.backgroundColor,
+                      labelStyle: theme.chipTheme.labelStyle,
                     );
                   }),
                 ),

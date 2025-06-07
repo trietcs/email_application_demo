@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/services/firestore_service.dart';
-import 'package:email_application/config/app_colors.dart';
 
 class EditProfileDetailsScreen extends StatefulWidget {
   const EditProfileDetailsScreen({super.key});
@@ -34,6 +33,13 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
     _dobController = TextEditingController();
     _currentUser = FirebaseAuth.instance.currentUser;
     _loadUserProfile();
+  }
+
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    _dobController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserProfile() async {
@@ -87,37 +93,25 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _displayNameController.dispose();
-    _dobController.dispose();
-    super.dispose();
-  }
-
   InputDecoration _themedInputDecoration(
     String label,
     IconData iconData,
-    bool isFocused,
+    ThemeData theme,
   ) {
-    final Color iconColor =
-        isFocused ? AppColors.primary : AppColors.secondaryIcon;
-    final Color labelColor =
-        isFocused ? AppColors.primary : AppColors.secondaryText;
-
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(color: labelColor),
-      prefixIcon: Icon(iconData, color: iconColor),
+      labelStyle: theme.textTheme.bodyMedium,
+      prefixIcon: Icon(iconData, color: theme.textTheme.bodyMedium?.color),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: AppColors.primary, width: 2),
+        borderSide: BorderSide(color: theme.primaryColor, width: 2),
       ),
-      floatingLabelStyle: TextStyle(color: AppColors.primary),
+      floatingLabelStyle: TextStyle(color: theme.primaryColor),
     );
   }
 
@@ -173,22 +167,27 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
     }
   }
 
-  Widget _buildDisplayItem(IconData icon, String label, String? value) {
+  Widget _buildDisplayItem(
+    IconData icon,
+    String label,
+    String? value,
+    ThemeData theme,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.secondaryIcon, size: 24),
+          Icon(icon, color: theme.textTheme.bodyMedium?.color, size: 24),
           const SizedBox(width: 16),
-          Text(
-            label,
-            style: TextStyle(fontSize: 16, color: AppColors.secondaryText),
-          ),
+          Text(label, style: theme.textTheme.bodyLarge),
           const Spacer(),
           Expanded(
             child: Text(
               value ?? 'Not updated yet',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: theme.textTheme.bodyMedium?.color,
+              ),
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
             ),
@@ -200,28 +199,19 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Personal information',
-          style: TextStyle(
-            color: AppColors.appBarForeground,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: AppColors.appBarBackground,
+        title: const Text('Personal information'),
         elevation: 1,
-        iconTheme: IconThemeData(color: AppColors.primary),
         actions: [
           if (!_isEditing && !_isLoading)
             TextButton(
               onPressed: () {
                 if (mounted) setState(() => _isEditing = true);
               },
-              child: Text(
-                'Edit',
-                style: TextStyle(color: AppColors.primary, fontSize: 16),
-              ),
+              child: const Text('Edit', style: TextStyle(fontSize: 16)),
             ),
           if (_isEditing && !_isLoading)
             TextButton(
@@ -233,7 +223,10 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
               },
               child: Text(
                 'Cancel',
-                style: TextStyle(color: AppColors.secondaryText, fontSize: 16),
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color,
+                  fontSize: 16,
+                ),
               ),
             ),
         ],
@@ -242,7 +235,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
           _isLoading
               ? Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  valueColor: AlwaysStoppedAnimation<Color>(theme.primaryColor),
                 ),
               )
               : SingleChildScrollView(
@@ -258,7 +251,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                     children: [
                       CircleAvatar(
                         radius: 50,
-                        backgroundColor: AppColors.primary.withOpacity(0.1),
+                        backgroundColor: theme.primaryColor.withOpacity(0.1),
                         backgroundImage:
                             _currentUser?.photoURL != null &&
                                     _currentUser!.photoURL!.isNotEmpty
@@ -277,7 +270,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                                       .toUpperCase(),
                                   style: TextStyle(
                                     fontSize: 40,
-                                    color: AppColors.primary,
+                                    color: theme.primaryColor,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 )
@@ -290,7 +283,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                           decoration: _themedInputDecoration(
                             'Display name',
                             Icons.person_rounded,
-                            true,
+                            theme,
                           ),
                           validator:
                               (value) =>
@@ -304,7 +297,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                           decoration: _themedInputDecoration(
                             'Date of birth',
                             Icons.calendar_today_rounded,
-                            true,
+                            theme,
                           ).copyWith(hintText: 'Tap to select date'),
                           readOnly: true,
                           onTap: () async {
@@ -322,21 +315,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                               ),
                               locale: const Locale('vi', 'VN'),
                               builder: (context, child) {
-                                return Theme(
-                                  data: ThemeData.light().copyWith(
-                                    colorScheme: ColorScheme.light(
-                                      primary: AppColors.primary,
-                                      onPrimary: AppColors.onPrimary,
-                                    ),
-                                    dialogBackgroundColor: Colors.white,
-                                    textButtonTheme: TextButtonThemeData(
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: AppColors.primary,
-                                      ),
-                                    ),
-                                  ),
-                                  child: child!,
-                                );
+                                return child!;
                               },
                             );
                             if (pickedDate != null &&
@@ -367,10 +346,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                           ),
                           child: Text(
                             'Gender',
-                            style: TextStyle(
-                              color: AppColors.secondaryText,
-                              fontSize: 12,
-                            ),
+                            style: theme.textTheme.bodySmall,
                           ),
                         ),
                         Row(
@@ -383,7 +359,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                                 onChanged:
                                     (value) =>
                                         setState(() => _selectedGender = value),
-                                activeColor: AppColors.primary,
+                                activeColor: theme.primaryColor,
                               ),
                             ),
                             Expanded(
@@ -394,7 +370,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                                 onChanged:
                                     (value) =>
                                         setState(() => _selectedGender = value),
-                                activeColor: AppColors.primary,
+                                activeColor: theme.primaryColor,
                               ),
                             ),
                           ],
@@ -407,7 +383,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                             child: Text(
                               'Please select gender.',
                               style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
+                                color: theme.colorScheme.error,
                                 fontSize: 12,
                               ),
                             ),
@@ -417,24 +393,18 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                         ElevatedButton(
                           onPressed: _isLoading ? null : _saveProfile,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: AppColors.onPrimary,
                             padding: const EdgeInsets.symmetric(
                               vertical: 12,
                               horizontal: 32,
                             ),
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
                           ),
                           child:
                               _isLoading
-                                  ? const SizedBox(
+                                  ? SizedBox(
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
-                                      color: Colors.white,
+                                      color: theme.colorScheme.onPrimary,
                                       strokeWidth: 3,
                                     ),
                                   )
@@ -447,6 +417,7 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                           _displayNameController.text.isNotEmpty
                               ? _displayNameController.text
                               : 'Not updated yet',
+                          theme,
                         ),
                         const Divider(),
                         _buildDisplayItem(
@@ -457,12 +428,14 @@ class _EditProfileDetailsScreenState extends State<EditProfileDetailsScreen> {
                                 'dd/MM/yyyy',
                               ).format(_selectedDateOfBirth!)
                               : 'Not updated yet',
+                          theme,
                         ),
                         const Divider(),
                         _buildDisplayItem(
                           Icons.wc_outlined,
                           "Gender",
                           _selectedGender ?? 'Not updated yet',
+                          theme,
                         ),
                       ],
                     ],

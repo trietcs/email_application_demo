@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:email_application/models/email_data.dart';
 import 'package:email_application/models/email_folder.dart';
 import 'package:email_application/widgets/email_list_item.dart';
-import 'package:email_application/config/app_colors.dart';
 import 'package:email_application/models/label_data.dart';
 
 typedef EmailTapCallback = Future<void> Function(EmailData email);
@@ -62,11 +61,11 @@ class EmailListView extends StatelessWidget {
             message = 'Trash is empty!';
             iconData = Icons.delete_sweep_outlined;
             break;
-          default:
-            message = 'No emails to show.';
-            iconData = Icons.email_outlined;
         }
       }
+
+      final theme = Theme.of(context);
+
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -75,11 +74,17 @@ class EmailListView extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(iconData, size: 60, color: Colors.grey.shade400),
+                Icon(
+                  iconData,
+                  size: 60,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                ),
                 const SizedBox(height: 16),
                 Text(
                   message,
-                  style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -119,6 +124,8 @@ class EmailListErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
@@ -129,22 +136,24 @@ class EmailListErrorView extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, color: AppColors.error, size: 48),
+                Icon(
+                  Icons.error_outline,
+                  color: theme.colorScheme.error,
+                  size: 48,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Error loading emails: $error',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.secondaryText),
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.refresh),
                   label: const Text('Try Again'),
                   onPressed: onRetry,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.onPrimary,
-                  ),
                 ),
               ],
             ),

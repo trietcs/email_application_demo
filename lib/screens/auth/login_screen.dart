@@ -1,6 +1,3 @@
-import 'package:email_application/config/app_colors.dart';
-import 'package:email_application/screens/auth/forgot_password_screen.dart';
-import 'package:email_application/screens/auth/register_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:email_application/services/auth_service.dart';
@@ -231,21 +228,22 @@ class _LoginScreenState extends State<LoginScreen> {
     String label,
     String hint,
     IconData iconData,
-    bool isFocused, {
+    bool isFocused,
+    ThemeData theme, {
     Widget? suffixIcon,
   }) {
-    final Color currentIconColor =
-        isFocused ? AppColors.primary : AppColors.secondaryText;
+    final Color iconColor =
+        isFocused ? theme.primaryColor : theme.textTheme.bodyMedium!.color!;
     return InputDecoration(
       labelText: label,
       hintText: hint,
       border: const OutlineInputBorder(),
-      prefixIcon: Icon(iconData, color: currentIconColor),
+      prefixIcon: Icon(iconData, color: iconColor),
       focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: AppColors.primary, width: 2.0),
+        borderSide: BorderSide(color: theme.primaryColor, width: 2.0),
       ),
-      labelStyle: TextStyle(color: AppColors.secondaryText),
-      floatingLabelStyle: TextStyle(color: AppColors.primary),
+      labelStyle: theme.textTheme.bodyMedium,
+      floatingLabelStyle: TextStyle(color: theme.primaryColor),
       suffixIcon: suffixIcon,
     );
   }
@@ -253,15 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'TVA Mail Login',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: IconThemeData(color: AppColors.primary),
-      ),
+      appBar: AppBar(title: const Text('TVA Mail Login'), elevation: 1),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
@@ -275,31 +265,36 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildEmailPasswordForm() {
+    final theme = Theme.of(context);
     return Form(
       key: _emailPasswordFormKey,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FlutterLogo(size: 60, textColor: AppColors.primary),
+          Image.asset('assets/images/app_logo.png', height: 80, width: 80),
           const SizedBox(height: 24),
           TextFormField(
             controller: _emailController,
             focusNode: _emailFocusNode,
             decoration: _themedInputDecoration(
-              'Email (@tvamail.com)',
-              'Enter your email',
+              'Username or Email',
+              'Enter your username',
               Icons.email_outlined,
               _emailFocusNode.hasFocus,
+              theme,
             ),
             keyboardType: TextInputType.emailAddress,
             autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your email.';
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter your username or email.';
               }
-              if (!value.contains('@tvamail.com')) {
-                return 'Please enter a valid @tvamail.com email.';
+              if (value.contains('@') && !value.endsWith('@tvamail.com')) {
+                return 'Email must end with @tvamail.com';
+              }
+              if (value.contains(' ')) {
+                return 'Username/email cannot contain spaces.';
               }
               return null;
             },
@@ -313,13 +308,14 @@ class _LoginScreenState extends State<LoginScreen> {
               '******',
               Icons.lock_outline_rounded,
               _passwordFocusNode.hasFocus,
+              theme,
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
                   color:
                       _passwordFocusNode.hasFocus
-                          ? AppColors.primary
-                          : AppColors.secondaryText,
+                          ? theme.primaryColor
+                          : theme.textTheme.bodyMedium?.color,
                 ),
                 onPressed: () {
                   if (mounted) {
@@ -346,31 +342,19 @@ class _LoginScreenState extends State<LoginScreen> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ForgotPasswordScreen(),
-                    ),
-                  );
+                  Navigator.pushNamed(context, '/forgot-password');
                 },
-                child: Text(
-                  'Forgot Password?',
-                  style: TextStyle(color: AppColors.primary),
-                ),
+                child: const Text('Forgot Password?'),
               ),
             ),
           ),
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : ElevatedButton(
                 onPressed: _loginWithEmailPassword,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   textStyle: const TextStyle(
                     fontSize: 16,
@@ -389,21 +373,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 });
               }
             },
-            child: Text(
-              'Login with Phone Number & OTP',
-              style: TextStyle(color: AppColors.primary),
-            ),
+            child: const Text('Login with Phone Number & OTP'),
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const RegisterScreen(),
-                  ),
-                ),
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            onPressed: () => Navigator.pushNamed(context, '/register'),
             child: const Text('No account? Register Now'),
           ),
         ],
@@ -412,13 +386,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildPhoneOtpForm() {
+    final theme = Theme.of(context);
     return Form(
       key: _phoneOtpFormKey,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FlutterLogo(size: 60, textColor: AppColors.primary),
+          Image.asset('assets/images/app_logo.png', height: 80, width: 80),
           const SizedBox(height: 24),
           TextFormField(
             controller: _phoneNumberController,
@@ -428,6 +403,7 @@ class _LoginScreenState extends State<LoginScreen> {
               'Enter your phone number',
               Icons.phone_android_rounded,
               _phoneNumberFocusNode.hasFocus,
+              theme,
             ),
             keyboardType: TextInputType.phone,
             autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -454,6 +430,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 'Enter OTP',
                 Icons.sms_outlined,
                 _otpFocusNode.hasFocus,
+                theme,
               ).copyWith(counterText: ""),
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
@@ -472,15 +449,11 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 24),
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : ElevatedButton(
                 onPressed: _otpSent ? _loginWithPhoneOtp : _sendLoginOtp,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   textStyle: const TextStyle(
                     fontSize: 16,
@@ -499,21 +472,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 });
               }
             },
-            child: Text(
-              'Login with Email & Password',
-              style: TextStyle(color: AppColors.primary),
-            ),
+            child: const Text('Login with Email & Password'),
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const RegisterScreen(),
-                  ),
-                ),
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            onPressed: () => Navigator.pushNamed(context, '/register'),
             child: const Text('No account? Register Now'),
           ),
         ],

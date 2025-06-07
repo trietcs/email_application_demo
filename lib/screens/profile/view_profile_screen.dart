@@ -7,7 +7,6 @@ import 'package:email_application/services/firestore_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:email_application/config/app_colors.dart';
 
 class ViewProfileScreen extends StatefulWidget {
   const ViewProfileScreen({super.key});
@@ -151,7 +150,6 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
         );
         setState(() => _pickedImageFile = null);
       }
-      print("Error uploading profile picture: $e");
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -161,16 +159,16 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
         );
         setState(() => _pickedImageFile = null);
       }
-      print("Unexpected error uploading profile picture: $e");
     } finally {
       if (mounted) setState(() => _isUploadingPhoto = false);
     }
   }
 
   void _showImageSourceActionSheet(BuildContext context) {
+    final theme = Theme.of(context);
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: theme.cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -179,7 +177,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
           child: Wrap(
             children: <Widget>[
               ListTile(
-                leading: Icon(Icons.photo_library, color: AppColors.primary),
+                leading: Icon(Icons.photo_library, color: theme.primaryColor),
                 title: const Text('Photo Library'),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -187,7 +185,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                 },
               ),
               ListTile(
-                leading: Icon(Icons.photo_camera, color: AppColors.primary),
+                leading: Icon(Icons.photo_camera, color: theme.primaryColor),
                 title: const Text('Camera'),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -209,7 +207,9 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
       builder: (BuildContext dialogContext) {
         return Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).primaryColor,
+            ),
           ),
         );
       },
@@ -293,7 +293,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
     }
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 4.0),
       child: Text(
@@ -301,22 +301,30 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: AppColors.primary,
+          color: Theme.of(context).primaryColor,
         ),
       ),
     );
   }
 
-  InputDecoration _themedInputDecoration(String label, IconData iconData) {
+  InputDecoration _themedInputDecoration(
+    String label,
+    IconData iconData,
+    ThemeData theme,
+  ) {
     return InputDecoration(
       labelText: label,
       border: const UnderlineInputBorder(),
-      prefixIcon: Icon(iconData, color: AppColors.secondaryIcon, size: 20),
-      focusedBorder: UnderlineInputBorder(
-        borderSide: BorderSide(color: AppColors.primary, width: 2.0),
+      prefixIcon: Icon(
+        iconData,
+        color: theme.textTheme.bodyMedium?.color,
+        size: 20,
       ),
-      labelStyle: TextStyle(color: AppColors.secondaryText),
-      floatingLabelStyle: TextStyle(color: AppColors.primary),
+      focusedBorder: UnderlineInputBorder(
+        borderSide: BorderSide(color: theme.primaryColor, width: 2.0),
+      ),
+      labelStyle: theme.textTheme.bodyMedium,
+      floatingLabelStyle: TextStyle(color: theme.primaryColor),
     );
   }
 
@@ -326,25 +334,24 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
     String label,
     String? value,
   ) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.secondaryIcon, size: 22),
+          Icon(icon, color: theme.textTheme.bodyMedium?.color, size: 22),
           const SizedBox(width: 16),
           Text(
             label,
-            style: TextStyle(fontSize: 16, color: AppColors.secondaryText),
+            style: theme.textTheme.bodyMedium?.copyWith(fontSize: 16),
           ),
           const Spacer(),
           Expanded(
             flex: 2,
             child: Text(
               value ?? 'Not set',
-              style: const TextStyle(
-                fontSize: 16,
+              style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w500,
-                color: Colors.black87,
               ),
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
@@ -357,24 +364,18 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final userFromProvider = Provider.of<User?>(context);
     final User? user = FirebaseAuth.instance.currentUser ?? userFromProvider;
 
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Profile'),
-          backgroundColor: AppColors.appBarBackground,
-          elevation: 1,
-          iconTheme: IconThemeData(color: AppColors.primary),
-        ),
+        appBar: AppBar(title: const Text('Profile')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-              ),
+              CircularProgressIndicator(color: theme.primaryColor),
               const SizedBox(height: 16),
               const Text('Loading user information...'),
             ],
@@ -397,20 +398,10 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
       initialLetter = user.phoneNumber![0];
     }
 
-    final CardTheme cardTheme = CardTheme(
-      elevation: 1.0,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE0E0E0), width: 0.5),
-      ),
-      color: Colors.white,
-    );
-
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
-          color: AppColors.primary,
+          color: theme.primaryColor,
           onRefresh: () async {
             if (mounted) {
               await user.reload();
@@ -434,7 +425,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                         _pickedImageFile?.path ?? _displayedPhotoUrl,
                       ),
                       radius: 60,
-                      backgroundColor: AppColors.primary.withOpacity(0.15),
+                      backgroundColor: theme.primaryColor.withOpacity(0.15),
                       backgroundImage:
                           _pickedImageFile != null
                               ? FileImage(_pickedImageFile!)
@@ -451,7 +442,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                                 initialLetter.toUpperCase(),
                                 style: TextStyle(
                                   fontSize: 40,
-                                  color: AppColors.primary,
+                                  color: theme.primaryColor,
                                   fontWeight: FontWeight.bold,
                                 ),
                               )
@@ -461,7 +452,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                       bottom: 0,
                       right: 0,
                       child: Material(
-                        color: Colors.white,
+                        color: theme.cardColor,
                         shape: const CircleBorder(),
                         elevation: 2.0,
                         child: InkWell(
@@ -479,15 +470,12 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                                       height: 20,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2.5,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              AppColors.primary,
-                                            ),
+                                        color: theme.primaryColor,
                                       ),
                                     )
                                     : Icon(
                                       Icons.camera_alt,
-                                      color: AppColors.primary,
+                                      color: theme.primaryColor,
                                       size: 20,
                                     ),
                           ),
@@ -499,12 +487,8 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
               ),
               const SizedBox(height: 16),
 
-              _buildSectionTitle("Account"),
+              _buildSectionTitle("Account", context),
               Card(
-                elevation: cardTheme.elevation,
-                margin: cardTheme.margin,
-                shape: cardTheme.shape,
-                color: cardTheme.color,
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -512,7 +496,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                   ),
                   leading: Icon(
                     Icons.person_outline_rounded,
-                    color: AppColors.secondaryIcon,
+                    color: theme.textTheme.bodyMedium?.color,
                     size: 28,
                   ),
                   title: const Text(
@@ -524,11 +508,11 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                         user.email ??
                         user.phoneNumber ??
                         'Not set',
-                    style: TextStyle(color: Colors.grey.shade600),
+                    style: theme.textTheme.bodyMedium,
                   ),
                   trailing: Icon(
                     Icons.chevron_right,
-                    color: Colors.grey.shade400,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
                     size: 28,
                   ),
                   onTap: () {
@@ -538,15 +522,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                         builder: (context) => const EditProfileDetailsScreen(),
                       ),
                     ).then((value) async {
-                      if (value == true && mounted) {
-                        await user.reload();
-                        final refreshedUser = FirebaseAuth.instance.currentUser;
-                        if (mounted) {
-                          setState(() {
-                            _displayedPhotoUrl = refreshedUser?.photoURL;
-                          });
-                        }
-                      } else if (mounted) {
+                      if (mounted) {
                         await user.reload();
                         final refreshedUser = FirebaseAuth.instance.currentUser;
                         if (mounted) {
@@ -560,12 +536,8 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                 ),
               ),
 
-              _buildSectionTitle("Contact Information"),
+              _buildSectionTitle("Contact Information", context),
               Card(
-                elevation: cardTheme.elevation,
-                margin: cardTheme.margin,
-                shape: cardTheme.shape,
-                color: cardTheme.color,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
@@ -579,7 +551,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                         "Email",
                         user.email,
                       ),
-                      const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                      const Divider(height: 1),
                       _buildInfoRow(
                         context,
                         Icons.phone_outlined,
@@ -591,24 +563,20 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                 ),
               ),
 
-              _buildSectionTitle("Login & Security"),
+              _buildSectionTitle("Login & Security", context),
               Card(
-                elevation: cardTheme.elevation,
-                margin: cardTheme.margin,
-                shape: cardTheme.shape,
-                color: cardTheme.color,
                 child: ExpansionTile(
                   key: GlobalKey(),
                   leading: Icon(
                     Icons.lock_outline_rounded,
-                    color: AppColors.secondaryIcon,
+                    color: theme.textTheme.bodyMedium?.color,
                   ),
                   title: const Text(
                     'Change Password',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                   ),
-                  iconColor: AppColors.primary,
-                  collapsedIconColor: Colors.grey.shade500,
+                  iconColor: theme.primaryColor,
+                  collapsedIconColor: theme.textTheme.bodyMedium?.color,
                   trailing: Icon(
                     _isPasswordSectionExpanded
                         ? Icons.expand_less
@@ -637,28 +605,27 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                               decoration: _themedInputDecoration(
                                 'Current Password',
                                 Icons.lock_open_outlined,
+                                theme,
                               ).copyWith(
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscureCurrentPassword
                                         ? Icons.visibility_off_outlined
                                         : Icons.visibility_outlined,
-                                    color: AppColors.secondaryIcon,
+                                    color: theme.textTheme.bodyMedium?.color,
                                     size: 20,
                                   ),
                                   onPressed:
-                                      () => setState(
-                                        () =>
-                                            _obscureCurrentPassword =
-                                                !_obscureCurrentPassword,
-                                      ),
+                                      () => setState(() {
+                                        _obscureCurrentPassword =
+                                            !_obscureCurrentPassword;
+                                      }),
                                 ),
                               ),
                               obscureText: _obscureCurrentPassword,
                               validator: (value) {
-                                if (value == null || value.isEmpty) {
+                                if (value == null || value.isEmpty)
                                   return 'Please enter your current password.';
-                                }
                                 return null;
                               },
                             ),
@@ -668,31 +635,29 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                               decoration: _themedInputDecoration(
                                 'New Password',
                                 Icons.lock_outline,
+                                theme,
                               ).copyWith(
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscureNewPassword
                                         ? Icons.visibility_off_outlined
                                         : Icons.visibility_outlined,
-                                    color: AppColors.secondaryIcon,
+                                    color: theme.textTheme.bodyMedium?.color,
                                     size: 20,
                                   ),
                                   onPressed:
-                                      () => setState(
-                                        () =>
-                                            _obscureNewPassword =
-                                                !_obscureNewPassword,
-                                      ),
+                                      () => setState(() {
+                                        _obscureNewPassword =
+                                            !_obscureNewPassword;
+                                      }),
                                 ),
                               ),
                               obscureText: _obscureNewPassword,
                               validator: (value) {
-                                if (value == null || value.isEmpty) {
+                                if (value == null || value.isEmpty)
                                   return 'Please enter a new password.';
-                                }
-                                if (value.length < 6) {
+                                if (value.length < 6)
                                   return 'Password must be at least 6 characters.';
-                                }
                                 return null;
                               },
                             ),
@@ -702,31 +667,29 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                               decoration: _themedInputDecoration(
                                 'Confirm New Password',
                                 Icons.lock_person_outlined,
+                                theme,
                               ).copyWith(
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscureConfirmNewPassword
                                         ? Icons.visibility_off_outlined
                                         : Icons.visibility_outlined,
-                                    color: AppColors.secondaryIcon,
+                                    color: theme.textTheme.bodyMedium?.color,
                                     size: 20,
                                   ),
                                   onPressed:
-                                      () => setState(
-                                        () =>
-                                            _obscureConfirmNewPassword =
-                                                !_obscureConfirmNewPassword,
-                                      ),
+                                      () => setState(() {
+                                        _obscureConfirmNewPassword =
+                                            !_obscureConfirmNewPassword;
+                                      }),
                                 ),
                               ),
                               obscureText: _obscureConfirmNewPassword,
                               validator: (value) {
-                                if (value == null || value.isEmpty) {
+                                if (value == null || value.isEmpty)
                                   return 'Please confirm your new password.';
-                                }
-                                if (value != _newPasswordController.text) {
+                                if (value != _newPasswordController.text)
                                   return 'Passwords do not match.';
-                                }
                                 return null;
                               },
                             ),
@@ -734,18 +697,11 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                             _isChangingPassword
                                 ? Center(
                                   child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      AppColors.primary,
-                                    ),
+                                    color: theme.primaryColor,
                                   ),
                                 )
                                 : ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: AppColors.onPrimary,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
                                     minimumSize: const Size(
                                       double.infinity,
                                       44,
@@ -770,13 +726,15 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                 label: const Text('Logout'),
                 onPressed: _logout,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent.withOpacity(0.1),
-                  foregroundColor: Colors.redAccent,
+                  backgroundColor: theme.colorScheme.error.withOpacity(0.1),
+                  foregroundColor: theme.colorScheme.error,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.redAccent.withOpacity(0.3)),
+                    side: BorderSide(
+                      color: theme.colorScheme.error.withOpacity(0.3),
+                    ),
                   ),
                 ),
               ),

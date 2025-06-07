@@ -1,4 +1,3 @@
-import 'package:email_application/config/app_colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:email_application/widgets/auth_wrapper.dart';
@@ -30,23 +29,24 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
 
   InputDecoration _themedInputDecoration(
     String label,
-    IconData iconData, {
+    IconData iconData,
+    ThemeData theme, {
     Widget? suffixIcon,
   }) {
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(color: AppColors.secondaryText),
-      prefixIcon: Icon(iconData, color: AppColors.secondaryText),
+      labelStyle: theme.textTheme.bodyMedium,
+      prefixIcon: Icon(iconData, color: theme.textTheme.bodyMedium?.color),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: AppColors.primary, width: 2),
+        borderSide: BorderSide(color: theme.primaryColor, width: 2),
       ),
-      floatingLabelStyle: TextStyle(color: AppColors.primary),
+      floatingLabelStyle: TextStyle(color: theme.primaryColor),
       suffixIcon: suffixIcon,
     );
   }
@@ -121,7 +121,6 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
             ),
           ),
         );
-        // Nếu không có user, quay về màn hình đầu (AuthWrapper sẽ xử lý)
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
       return;
@@ -170,13 +169,8 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _otpVerified ? 'Set New Password' : 'Verify OTP',
-          style: TextStyle(color: Colors.black87),
-        ),
-        backgroundColor: Colors.white,
+        title: Text(_otpVerified ? 'Set New Password' : 'Verify OTP'),
         elevation: 1,
-        iconTheme: IconThemeData(color: AppColors.primary),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -192,22 +186,25 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
   }
 
   Widget _buildOtpForm() {
+    final theme = Theme.of(context);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'Verify Your Phone Number',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 16),
         Text(
           'An OTP has been sent to ${widget.phoneNumber}.\nPlease enter the 6-digit code below.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 16, color: AppColors.secondaryText),
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.textTheme.bodyMedium?.color,
+          ),
         ),
         const SizedBox(height: 32),
         TextFormField(
@@ -215,6 +212,7 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
           decoration: _themedInputDecoration(
             'OTP Code (6 digits)',
             Icons.sms_outlined,
+            theme,
           ).copyWith(counterText: ""),
           keyboardType: TextInputType.number,
           textAlign: TextAlign.center,
@@ -232,15 +230,11 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
         const SizedBox(height: 24),
         _isLoading
             ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-              ),
+              child: CircularProgressIndicator(color: theme.primaryColor),
             )
             : ElevatedButton(
               onPressed: _verifyOtpAndPreparePasswordReset,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 textStyle: const TextStyle(
                   fontSize: 16,
@@ -254,15 +248,16 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
   }
 
   Widget _buildNewPasswordForm() {
+    final theme = Theme.of(context);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'Create New Password',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
@@ -271,10 +266,11 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
           decoration: _themedInputDecoration(
             'New Password',
             Icons.lock_outline_rounded,
+            theme,
             suffixIcon: IconButton(
               icon: Icon(
                 _obscureNewPassword ? Icons.visibility_off : Icons.visibility,
-                color: AppColors.secondaryText,
+                color: theme.textTheme.bodyMedium?.color,
               ),
               onPressed:
                   () => setState(
@@ -298,14 +294,14 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
           controller: _confirmPasswordController,
           decoration: _themedInputDecoration(
             'Confirm New Password',
-            Icons
-                .lock_person_rounded, // Changed from lock_person_outline_rounded
+            Icons.lock_person_rounded,
+            theme,
             suffixIcon: IconButton(
               icon: Icon(
                 _obscureConfirmPassword
                     ? Icons.visibility_off
                     : Icons.visibility,
-                color: AppColors.secondaryText,
+                color: theme.textTheme.bodyMedium?.color,
               ),
               onPressed:
                   () => setState(
@@ -327,15 +323,11 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
         const SizedBox(height: 24),
         _isLoading
             ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-              ),
+              child: CircularProgressIndicator(color: theme.primaryColor),
             )
             : ElevatedButton(
               onPressed: _setNewPassword,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 textStyle: const TextStyle(
                   fontSize: 16,

@@ -323,7 +323,6 @@ class FirestoreService {
     List<Map<String, String>>? attachments,
   }) async {
     try {
-      final Timestamp now = Timestamp.now();
       final senderProfile = await getUserProfile(senderId);
       final senderActualEmail =
           senderProfile?['customEmail'] ?? 'unknown_sender@tvamail.com';
@@ -483,11 +482,7 @@ class FirestoreService {
 
       return snapshot.docs.map<Map<String, dynamic>>((doc) {
         final data = doc.data();
-        if (data is Map<String, dynamic>) {
-          return {...data, 'id': doc.id};
-        } else {
-          return {'id': doc.id};
-        }
+        return {...data, 'id': doc.id};
       }).toList();
     } catch (e) {
       print('Error getting starred emails for user $userId: $e');
@@ -514,8 +509,7 @@ class FirestoreService {
       }
 
       final String actualCurrentFolderFromDoc =
-          (emailDoc.data() as Map<String, dynamic>?)?['folder'] ??
-          currentFolder.folderName;
+          (emailDoc.data())?['folder'] ?? currentFolder.folderName;
 
       if (targetFolder == EmailFolder.trash) {
         await emailRef.update({
@@ -766,7 +760,7 @@ class FirestoreService {
               .orderBy('name')
               .get();
       return snapshot.docs.map((doc) {
-        return LabelData.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        return LabelData.fromMap(doc.data(), doc.id);
       }).toList();
     } catch (e) {
       print('Error fetching labels for user $userId: $e');

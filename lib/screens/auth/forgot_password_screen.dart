@@ -2,7 +2,6 @@ import 'package:email_application/screens/auth/reset_password_otp_screen.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:email_application/config/app_colors.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -16,21 +15,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _phoneNumberController = TextEditingController();
   bool _isLoading = false;
 
-  InputDecoration _themedInputDecoration(String label, IconData iconData) {
+  InputDecoration _themedInputDecoration(
+    String label,
+    IconData iconData,
+    ThemeData theme,
+  ) {
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(color: AppColors.secondaryText),
-      prefixIcon: Icon(iconData, color: AppColors.secondaryText),
+      labelStyle: theme.textTheme.bodyMedium,
+      prefixIcon: Icon(iconData, color: theme.textTheme.bodyMedium?.color),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: AppColors.primary, width: 2),
+        borderSide: BorderSide(color: theme.primaryColor, width: 2),
       ),
-      floatingLabelStyle: TextStyle(color: AppColors.primary),
+      floatingLabelStyle: TextStyle(color: theme.primaryColor),
     );
   }
 
@@ -100,16 +103,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Forgot Password',
-          style: TextStyle(color: Colors.black87),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: IconThemeData(color: AppColors.primary),
-      ),
+      appBar: AppBar(title: const Text('Forgot Password'), elevation: 1),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
@@ -121,7 +118,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               children: [
                 Text(
                   'Reset Your Password',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                   textAlign: TextAlign.center,
@@ -130,9 +127,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 Text(
                   'Enter your registered phone number. We will send an OTP to reset your password.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppColors.secondaryText,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.textTheme.bodyMedium?.color,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -141,6 +137,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   decoration: _themedInputDecoration(
                     'Phone Number',
                     Icons.phone_android_rounded,
+                    theme,
                   ),
                   keyboardType: TextInputType.phone,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -160,16 +157,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 _isLoading
                     ? Center(
                       child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.primary,
-                        ),
+                        color: theme.primaryColor,
                       ),
                     )
                     : ElevatedButton(
                       onPressed: _sendResetOtp,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         textStyle: const TextStyle(
                           fontSize: 16,
@@ -181,10 +174,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
-                    'Back to Login',
-                    style: TextStyle(color: AppColors.primary),
-                  ),
+                  child: const Text('Back to Login'),
                 ),
               ],
             ),

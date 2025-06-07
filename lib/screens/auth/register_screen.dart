@@ -24,13 +24,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   RegistrationStep _currentStepEnum = RegistrationStep.phoneInput;
   final PageController _pageController = PageController();
 
-  // Form Keys cho từng bước
   final _phoneFormKey = GlobalKey<FormState>();
   final _otpFormKey = GlobalKey<FormState>();
   final _personalInfoFormKey = GlobalKey<FormState>();
   final _emailPasswordFormKey = GlobalKey<FormState>();
 
-  // Controllers
   final _phoneNumberController = TextEditingController();
   final _otpController = TextEditingController();
   final _emailUsernameController = TextEditingController();
@@ -39,7 +37,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _displayNameController = TextEditingController();
   final _dobController = TextEditingController();
 
-  // FocusNodes
   late FocusNode _phoneFocusNode;
   late FocusNode _otpFocusNode;
   late FocusNode _displayNameFocusNode;
@@ -476,24 +473,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
     String hint,
     IconData iconData,
     bool isFocused,
+    ThemeData theme,
   ) {
     final Color currentIconColor =
-        isFocused ? AppColors.primary : AppColors.secondaryText;
+        isFocused ? theme.primaryColor : theme.textTheme.bodyMedium!.color!;
     return InputDecoration(
       labelText: label,
       hintText: hint,
       border: const OutlineInputBorder(),
       prefixIcon: Icon(iconData, color: currentIconColor),
       focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: AppColors.primary, width: 2.0),
+        borderSide: BorderSide(color: theme.primaryColor, width: 2.0),
       ),
-      labelStyle: TextStyle(color: AppColors.secondaryText),
-      floatingLabelStyle: TextStyle(color: AppColors.primary),
+      labelStyle: theme.textTheme.bodyMedium,
+      floatingLabelStyle: TextStyle(color: theme.primaryColor),
     );
   }
 
   Widget _buildPhoneInputPage() {
-    // Bước 1
+    final theme = Theme.of(context);
     return Form(
       key: _phoneFormKey,
       child: Column(
@@ -502,9 +500,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           Text(
             "Step 1: Enter Phone Number",
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -517,6 +513,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               'E.g., 0901234567 or +84901234567',
               Icons.phone_android_rounded,
               _phoneFocusNode.hasFocus,
+              theme,
             ),
             keyboardType: TextInputType.phone,
             validator: (value) {
@@ -532,21 +529,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 24),
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : ElevatedButton(
                 onPressed: _sendOtp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
                 child: const Text('Send OTP'),
               ),
         ],
@@ -555,7 +541,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildOtpInputPage() {
-    // Bước 2
+    final theme = Theme.of(context);
     return Form(
       key: _otpFormKey,
       child: Column(
@@ -564,16 +550,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           Text(
             "Step 2: Verify OTP",
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
           Text(
             "Enter the OTP sent to\n$_verifiedPhoneNumberForDisplay",
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16),
+            style: theme.textTheme.bodyLarge,
           ),
           const SizedBox(height: 24),
           TextFormField(
@@ -585,6 +569,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               '******',
               Icons.sms_failed_outlined,
               _otpFocusNode.hasFocus,
+              theme,
             ).copyWith(counterText: ""),
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
@@ -599,21 +584,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 24),
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : ElevatedButton(
                 onPressed: _verifyOtpAndProceed,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
                 child: const Text('Verify OTP & Continue'),
               ),
           TextButton(
@@ -621,7 +595,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _isLoading
                     ? null
                     : () => _moveToPage(RegistrationStep.phoneInput.index),
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
             child: const Text("Back to Phone Input"),
           ),
         ],
@@ -629,8 +602,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Bước 3:
   Widget _buildPersonalInfoInputPage() {
+    final theme = Theme.of(context);
     return Form(
       key: _personalInfoFormKey,
       child: Column(
@@ -639,9 +612,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           Text(
             "Step 3: Personal Information",
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -654,6 +625,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               'John Doe',
               Icons.person_outline_rounded,
               _displayNameFocusNode.hasFocus,
+              theme,
             ),
             validator: (value) {
               if (value == null || value.isEmpty)
@@ -670,11 +642,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               '',
               Icons.wc_rounded,
               _genderFocusNode.hasFocus,
+              theme,
             ).copyWith(
               hintText: 'Select Gender',
-              hintStyle: TextStyle(
-                color: AppColors.secondaryText.withOpacity(0.7),
-              ),
+              hintStyle: theme.textTheme.bodyMedium,
             ),
             value: _selectedGender,
             items:
@@ -701,8 +672,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 (value) => value == null ? 'Please select your gender.' : null,
             iconEnabledColor:
                 _genderFocusNode.hasFocus
-                    ? AppColors.primary
-                    : AppColors.secondaryText,
+                    ? theme.primaryColor
+                    : theme.textTheme.bodyMedium?.color,
           ),
           const SizedBox(height: 16),
           TextFormField(
@@ -714,6 +685,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               'Tap to select date',
               Icons.calendar_today_rounded,
               _dobFocusNode.hasFocus,
+              theme,
             ),
             readOnly: true,
             onTap: () async {
@@ -730,18 +702,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 locale: const Locale('vi', 'VN'),
                 builder: (context, child) {
                   return Theme(
-                    data: ThemeData.light().copyWith(
-                      colorScheme: ColorScheme.light(
+                    data: theme.copyWith(
+                      colorScheme: theme.colorScheme.copyWith(
                         primary: AppColors.primary,
-                        onPrimary: AppColors.onPrimary,
-                        surface: Colors.white,
-                        onSurface: Colors.black87,
-                      ),
-                      dialogBackgroundColor: Colors.white,
-                      textButtonTheme: TextButtonThemeData(
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                        ),
+                        onPrimary: AppColors.lightOnPrimary,
                       ),
                     ),
                     child: child!,
@@ -766,21 +730,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 24),
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : ElevatedButton(
                 onPressed: _proceedToEmailPassword,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
                 child: const Text('Continue'),
               ),
           TextButton(
@@ -788,7 +741,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _isLoading
                     ? null
                     : () => _moveToPage(RegistrationStep.otpInput.index),
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
             child: const Text("Back to OTP Input"),
           ),
         ],
@@ -796,8 +748,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Bước 4
   Widget _buildEmailPasswordInputPage() {
+    final theme = Theme.of(context);
     return Form(
       key: _emailPasswordFormKey,
       child: Column(
@@ -806,9 +758,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           Text(
             "Step 4: Create Email & Password",
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -821,6 +771,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               'e.g., your.name',
               Icons.alternate_email_rounded,
               _emailUsernameFocusNode.hasFocus,
+              theme,
             ).copyWith(suffixText: "@tvamail.com"),
             validator: (value) {
               if (value == null || value.isEmpty)
@@ -842,14 +793,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               '******',
               Icons.lock_outline_rounded,
               _passwordFocusNode.hasFocus,
+              theme,
             ).copyWith(
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
                   color:
                       _passwordFocusNode.hasFocus
-                          ? AppColors.primary
-                          : AppColors.secondaryText,
+                          ? theme.primaryColor
+                          : theme.textTheme.bodyMedium?.color,
                 ),
                 onPressed:
                     () => setState(() => _obscurePassword = !_obscurePassword),
@@ -874,6 +826,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               '******',
               Icons.lock_person_outlined,
               _confirmPasswordFocusNode.hasFocus,
+              theme,
             ).copyWith(
               suffixIcon: IconButton(
                 icon: Icon(
@@ -882,8 +835,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       : Icons.visibility,
                   color:
                       _confirmPasswordFocusNode.hasFocus
-                          ? AppColors.primary
-                          : AppColors.secondaryText,
+                          ? theme.primaryColor
+                          : theme.textTheme.bodyMedium?.color,
                 ),
                 onPressed:
                     () => setState(
@@ -903,30 +856,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 24),
           Text(
             "Verified Phone: $_verifiedPhoneNumberForDisplay",
-            style: const TextStyle(fontSize: 16),
+            style: theme.textTheme.bodyLarge,
           ),
           Text(
             "Full Name: ${_displayNameController.text}",
-            style: const TextStyle(fontSize: 16),
+            style: theme.textTheme.bodyLarge,
           ),
           const SizedBox(height: 24),
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : ElevatedButton(
                 onPressed: _completeRegistration,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
                 child: const Text('Complete Registration'),
               ),
           TextButton(
@@ -935,7 +877,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ? null
                     : () =>
                         _moveToPage(RegistrationStep.personalInfoInput.index),
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
             child: const Text("Back to Personal Info"),
           ),
         ],
@@ -963,13 +904,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          appBarTitle,
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: IconThemeData(color: AppColors.primary),
+        title: Text(appBarTitle),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _handleBackPress,

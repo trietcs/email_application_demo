@@ -5,7 +5,6 @@ import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:email_application/config/app_colors.dart';
 
 enum AttachmentType { image, pdf, text, unsupported }
 
@@ -92,19 +91,14 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.attachmentName,
-          style: TextStyle(color: AppColors.appBarForeground),
-        ),
-        backgroundColor: AppColors.appBarBackground,
-        iconTheme: IconThemeData(color: AppColors.primary),
-      ),
+      appBar: AppBar(title: Text(widget.attachmentName)),
       body:
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : _loadingError != null
               ? Center(
@@ -115,35 +109,26 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
                     children: [
                       Icon(
                         Icons.error_outline,
-                        color: AppColors.error,
+                        color: theme.colorScheme.error,
                         size: 48,
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'Could not display attachment.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: AppColors.secondaryText,
-                        ),
+                        style: theme.textTheme.titleMedium,
                       ),
+                      const SizedBox(height: 8),
                       Text(
                         _loadingError!,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.secondaryText.withOpacity(0.8),
-                        ),
+                        style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.open_in_new),
                         label: const Text('Try Opening Externally'),
                         onPressed: _launchUrl,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.onPrimary,
-                        ),
                       ),
                     ],
                   ),
@@ -154,6 +139,8 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
   }
 
   Widget _buildContentView() {
+    final theme = Theme.of(context);
+
     switch (_type) {
       case AttachmentType.image:
         return PhotoView(
@@ -166,7 +153,7 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
                           ? null
                           : event.cumulativeBytesLoaded /
                               event.expectedTotalBytes!,
-                  color: AppColors.primary,
+                  color: theme.primaryColor,
                 ),
               ),
           errorBuilder:
@@ -177,12 +164,12 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
                     Icon(
                       Icons.broken_image,
                       size: 48,
-                      color: AppColors.secondaryText,
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       "Error loading image",
-                      style: TextStyle(color: AppColors.secondaryText),
+                      style: theme.textTheme.bodyMedium,
                     ),
                   ],
                 ),
@@ -197,14 +184,14 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               );
             }
             if (snapshot.hasError || snapshot.data == null) {
               return Center(
                 child: Text(
                   'Error loading PDF: ${snapshot.error ?? "File not found"}',
-                  style: TextStyle(color: AppColors.secondaryText),
+                  style: theme.textTheme.bodyMedium,
                 ),
               );
             }
@@ -223,10 +210,12 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
       case AttachmentType.text:
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
-          child: Text(_textContent ?? 'No content or failed to load.'),
+          child: Text(
+            _textContent ?? 'No content or failed to load.',
+            style: theme.textTheme.bodyLarge,
+          ),
         );
       case AttachmentType.unsupported:
-      default:
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -234,23 +223,22 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
               Icon(
                 Icons.insert_drive_file_outlined,
                 size: 48,
-                color: AppColors.secondaryText,
+                color: theme.textTheme.bodyMedium?.color,
               ),
               const SizedBox(height: 16),
-              Text(
-                'Unsupported attachment type: ${widget.attachmentMimeType ?? widget.attachmentName.split('.').last}',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: AppColors.secondaryText),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Text(
+                  'Unsupported attachment type: ${widget.attachmentMimeType ?? widget.attachmentName.split('.').last}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium,
+                ),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 icon: const Icon(Icons.open_in_new),
                 label: const Text('Try Opening Externally'),
                 onPressed: _launchUrl,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
-                ),
               ),
             ],
           ),

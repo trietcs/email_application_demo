@@ -155,13 +155,18 @@ class _MainScreenState extends State<MainScreen> {
     final bool isSelected =
         _selectedLabelForView == null &&
         _currentStaticScreenIndex == screenIndex;
+    final theme = Theme.of(context);
+
     return Material(
       color:
-          isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          isSelected ? theme.primaryColor.withOpacity(0.1) : Colors.transparent,
       child: ListTile(
         leading: Icon(
           icon,
-          color: isSelected ? AppColors.primary : AppColors.secondaryIcon,
+          color:
+              isSelected
+                  ? theme.primaryColor
+                  : theme.textTheme.bodyMedium?.color,
           size: 24,
         ),
         title: Text(
@@ -169,7 +174,8 @@ class _MainScreenState extends State<MainScreen> {
           style: TextStyle(
             fontSize: 16,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-            color: isSelected ? AppColors.primary : Colors.black87,
+            color:
+                isSelected ? theme.primaryColor : theme.colorScheme.onSurface,
           ),
         ),
         selected: isSelected,
@@ -183,16 +189,17 @@ class _MainScreenState extends State<MainScreen> {
     required String title,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       child: ListTile(
-        leading: Icon(icon, color: AppColors.secondaryIcon, size: 24),
+        leading: Icon(icon, color: theme.textTheme.bodyMedium?.color, size: 24),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: theme.colorScheme.onSurface,
           ),
         ),
         onTap: onTap,
@@ -202,13 +209,15 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildLabelDrawerItem(LabelData label) {
     final bool isSelected = _selectedLabelForView?.id == label.id;
+    final theme = Theme.of(context);
+
     return Material(
       color:
-          isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          isSelected ? theme.primaryColor.withOpacity(0.1) : Colors.transparent,
       child: ListTile(
         leading: Icon(
           Icons.label,
-          color: isSelected ? AppColors.primary : label.color,
+          color: isSelected ? theme.primaryColor : label.color,
           size: 24,
         ),
         title: Text(
@@ -216,7 +225,8 @@ class _MainScreenState extends State<MainScreen> {
           style: TextStyle(
             fontSize: 15,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? AppColors.primary : Colors.black87,
+            color:
+                isSelected ? theme.primaryColor : theme.colorScheme.onSurface,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -241,26 +251,18 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _currentAppBarTitle,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.appBarForeground,
-          ),
-        ),
-        backgroundColor: AppColors.appBarBackground,
+        title: Text(_currentAppBarTitle),
         elevation: 1,
         leading: Builder(
           builder:
               (context) => IconButton(
-                icon: Icon(Icons.menu, color: AppColors.primary, size: 28),
+                icon: Icon(Icons.menu, size: 28),
                 onPressed: () => Scaffold.of(context).openDrawer(),
               ),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.search, color: AppColors.primary, size: 28),
+            icon: Icon(Icons.search, size: 28),
             tooltip: 'Search Emails',
             onPressed: () {
               showSearch(
@@ -272,156 +274,158 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       drawer: Drawer(
-        child: Container(
-          color: Colors.white,
-          child: Column(
-            children: [
-              DrawerHeader(
-                decoration: BoxDecoration(color: AppColors.primary),
-                child: Align(
-                  alignment: Alignment.bottomLeft,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.email_rounded,
-                            size: 36,
-                            color: AppColors.onPrimary,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'TVA MAIL',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.onPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4.0),
-                        child: Text(
-                          _currentUser?.displayName ??
-                              _currentUser?.email ??
-                              'User',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.onPrimary.withOpacity(0.85),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: AppColors.primary),
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStandardDrawerItem(
-                      icon: Icons.inbox_outlined,
-                      title: 'Inbox',
-                      screenIndex: 0,
-                    ),
-                    _buildStandardDrawerItem(
-                      icon: Icons.send_outlined,
-                      title: 'Sent',
-                      screenIndex: 1,
-                    ),
-                    _buildStandardDrawerItem(
-                      icon: Icons.star_outline_rounded,
-                      title: 'Starred',
-                      screenIndex: 2,
-                    ),
-                    _buildStandardDrawerItem(
-                      icon: Icons.drafts_outlined,
-                      title: 'Drafts',
-                      screenIndex: 3,
-                    ),
-                    _buildStandardDrawerItem(
-                      icon: Icons.delete_outline_rounded,
-                      title: 'Trash',
-                      screenIndex: 4,
-                    ),
-                    const Divider(height: 1),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 12.0,
-                      ),
-                      child: Text(
-                        "LABELS",
-                        style: TextStyle(
-                          color: AppColors.secondaryText,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/images/app_logo.png',
+                          width: 40, // Điều chỉnh kích thước nếu cần
+                          height: 40,
                         ),
-                      ),
-                    ),
-                    if (_isLoadingDrawerLabels)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      )
-                    else if (_userLabelsForDrawer.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 4.0,
-                        ),
-                        child: Text(
-                          "No labels yet. Manage labels to add some.",
+                        const SizedBox(width: 12),
+                        Text(
+                          'TVA MAIL',
                           style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         ),
-                      )
-                    else
-                      ..._userLabelsForDrawer
-                          .map((label) => _buildLabelDrawerItem(label))
-                          .toList(),
-
-                    const Divider(height: 1),
-                    _buildRouteDrawerItem(
-                      icon: Icons.label_outline_rounded,
-                      title: 'Manage Labels',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ManageLabelsScreen(),
-                          ),
-                        ).then((_) {
-                          _fetchUserLabelsForDrawer();
-                        });
-                      },
+                      ],
                     ),
-                    const Divider(height: 1),
-                    _buildStandardDrawerItem(
-                      icon: Icons.person_outline_rounded,
-                      title: 'Profile',
-                      screenIndex: 5,
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4.0),
+                      child: Text(
+                        _currentUser?.displayName ??
+                            _currentUser?.email ??
+                            'User',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary.withOpacity(0.85),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  _buildStandardDrawerItem(
+                    icon: Icons.inbox_outlined,
+                    title: 'Inbox',
+                    screenIndex: 0,
+                  ),
+                  _buildStandardDrawerItem(
+                    icon: Icons.send_outlined,
+                    title: 'Sent',
+                    screenIndex: 1,
+                  ),
+                  _buildStandardDrawerItem(
+                    icon: Icons.star_outline_rounded,
+                    title: 'Starred',
+                    screenIndex: 2,
+                  ),
+                  _buildStandardDrawerItem(
+                    icon: Icons.drafts_outlined,
+                    title: 'Drafts',
+                    screenIndex: 3,
+                  ),
+                  _buildStandardDrawerItem(
+                    icon: Icons.delete_outline_rounded,
+                    title: 'Trash',
+                    screenIndex: 4,
+                  ),
+                  const Divider(height: 1),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 12.0,
+                    ),
+                    child: Text(
+                      "LABELS",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  if (_isLoadingDrawerLabels)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  else if (_userLabelsForDrawer.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 4.0,
+                      ),
+                      child: Text(
+                        "No labels yet. Manage labels to add some.",
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    )
+                  else
+                    ..._userLabelsForDrawer
+                        .map((label) => _buildLabelDrawerItem(label))
+                        .toList(),
+                  const Divider(height: 1),
+                  _buildRouteDrawerItem(
+                    icon: Icons.label_outline_rounded,
+                    title: 'Manage Labels',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ManageLabelsScreen(),
+                        ),
+                      ).then((_) {
+                        _fetchUserLabelsForDrawer();
+                      });
+                    },
+                  ),
+                  const Divider(height: 1),
+                  _buildStandardDrawerItem(
+                    icon: Icons.person_outline_rounded,
+                    title: 'Profile',
+                    screenIndex: 5,
+                  ),
+                  _buildRouteDrawerItem(
+                    icon: Icons.settings_outlined,
+                    title: 'Settings',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/settings');
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
       body: _buildCurrentViewWidget(),
@@ -432,9 +436,8 @@ class _MainScreenState extends State<MainScreen> {
             MaterialPageRoute(builder: (context) => const ComposeEmailScreen()),
           );
         },
-        backgroundColor: AppColors.primary,
         tooltip: 'Compose',
-        child: Icon(Icons.edit_outlined, color: AppColors.onPrimary, size: 26),
+        child: const Icon(Icons.edit_outlined, size: 26),
       ),
     );
   }

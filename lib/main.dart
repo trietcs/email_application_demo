@@ -6,8 +6,10 @@ import 'package:email_application/screens/auth/register_screen.dart';
 import 'package:email_application/screens/compose/compose_email_screen.dart';
 import 'package:email_application/screens/main_screen.dart';
 import 'package:email_application/screens/profile/view_profile_screen.dart';
+import 'package:email_application/screens/settings/settings_screen.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
+import 'package:email_application/services/theme_notifier.dart';
 import 'package:email_application/widgets/auth_wrapper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -21,6 +23,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeNotifier()),
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
         StreamProvider<User?>(
@@ -38,47 +41,148 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TVA Email',
-      theme: ThemeData(
-        primaryColor: AppColors.primary,
-        scaffoldBackgroundColor: AppColors.background,
+    final themeNotifier = Provider.of<ThemeNotifier>(context);
 
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.appBarBackground,
-          foregroundColor: AppColors.appBarForeground,
-          iconTheme: IconThemeData(color: AppColors.primary),
-        ),
+    final lightTheme = ThemeData(
+      brightness: Brightness.light,
+      primaryColor: AppColors.primary,
+      scaffoldBackgroundColor: AppColors.lightBackground,
+      fontFamily: 'Roboto',
 
-        iconTheme: const IconThemeData(color: AppColors.primary),
-
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-        ),
-
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.onPrimary,
-          ),
-        ),
-
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.onPrimary,
-        ),
-
-        colorScheme: ColorScheme.fromSwatch().copyWith(
-          primary: AppColors.primary,
-          secondary: AppColors.accent,
-          error: AppColors.error,
-        ),
-
-        dividerTheme: DividerThemeData(
-          color: Colors.grey.shade200,
-          thickness: 1,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.lightSurface,
+        foregroundColor: AppColors.lightOnSurface,
+        elevation: 1,
+        iconTheme: IconThemeData(color: AppColors.primary),
+        titleTextStyle: TextStyle(
+          color: AppColors.lightOnSurface,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
         ),
       ),
+
+      cardTheme: const CardTheme(
+        color: AppColors.lightSurface,
+        elevation: 0.5,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: AppColors.lightBorder, width: 1),
+        ),
+      ),
+
+      drawerTheme: const DrawerThemeData(
+        backgroundColor: AppColors.lightSurface,
+      ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.lightBorder,
+        thickness: 1,
+      ),
+      iconTheme: const IconThemeData(color: AppColors.primary),
+
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: AppColors.lightOnBackground, fontSize: 16),
+        bodyMedium: TextStyle(
+          color: AppColors.lightSecondaryText,
+          fontSize: 14,
+        ),
+        titleLarge: TextStyle(
+          color: AppColors.lightOnBackground,
+          fontWeight: FontWeight.bold,
+        ),
+        titleMedium: TextStyle(
+          color: AppColors.lightOnBackground,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ).apply(
+        bodyColor: AppColors.lightOnBackground,
+        displayColor: AppColors.lightOnBackground,
+      ),
+
+      colorScheme: const ColorScheme.light(
+        primary: AppColors.primary,
+        onPrimary: AppColors.lightOnPrimary,
+        secondary: AppColors.accent,
+        background: AppColors.lightBackground,
+        onBackground: AppColors.lightOnBackground,
+        surface: AppColors.lightSurface,
+        onSurface: AppColors.lightOnSurface,
+        error: AppColors.error,
+        onError: Colors.white,
+      ),
+    );
+
+    final darkTheme = ThemeData(
+      brightness: Brightness.dark,
+      primaryColor: AppColors.primary,
+      scaffoldBackgroundColor: AppColors.darkBackground,
+      fontFamily: 'Roboto',
+
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.darkSurface,
+        foregroundColor: AppColors.darkOnSurface,
+        elevation: 1,
+        iconTheme: IconThemeData(color: AppColors.primary),
+        titleTextStyle: TextStyle(
+          color: AppColors.darkOnSurface,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+
+      cardTheme: const CardTheme(
+        color: AppColors.darkSurface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: AppColors.darkBorder, width: 1),
+        ),
+      ),
+
+      drawerTheme: const DrawerThemeData(
+        backgroundColor: AppColors.darkSurface,
+      ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.darkBorder,
+        thickness: 1,
+      ),
+      iconTheme: const IconThemeData(color: AppColors.primary),
+
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: AppColors.darkOnBackground, fontSize: 16),
+        bodyMedium: TextStyle(color: AppColors.darkSecondaryText, fontSize: 14),
+        titleLarge: TextStyle(
+          color: AppColors.darkOnBackground,
+          fontWeight: FontWeight.bold,
+        ),
+        titleMedium: TextStyle(
+          color: AppColors.darkOnBackground,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ).apply(
+        bodyColor: AppColors.darkOnBackground,
+        displayColor: AppColors.darkOnBackground,
+      ),
+
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primary,
+        onPrimary: AppColors.darkOnPrimary,
+        secondary: AppColors.accent,
+        background: AppColors.darkBackground,
+        onBackground: AppColors.darkOnBackground,
+        surface: AppColors.darkSurface,
+        onSurface: AppColors.darkOnSurface,
+        error: AppColors.error,
+        onError: Colors.white,
+      ),
+    );
+
+    return MaterialApp(
+      title: 'TVA Email',
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: themeNotifier.themeMode,
 
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -96,6 +200,7 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => const ViewProfileScreen(),
         '/compose': (context) => const ComposeEmailScreen(),
         '/forgot-password': (context) => const ForgotPasswordScreen(),
+        '/settings': (context) => const SettingsScreen(),
       },
     );
   }

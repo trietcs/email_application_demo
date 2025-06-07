@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:email_application/models/label_data.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
-import 'package:email_application/config/app_colors.dart';
 
 class ManageLabelsScreen extends StatefulWidget {
   const ManageLabelsScreen({super.key});
@@ -70,14 +69,14 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
     final _labelNameController = TextEditingController(
       text: existingLabel?.name ?? '',
     );
-    Color _selectedColor =
-        existingLabel?.color ??
-        _predefinedLabelColors.first;
+    Color _selectedColor = existingLabel?.color ?? _predefinedLabelColors.first;
     final _formKey = GlobalKey<FormState>();
 
     Color? pickedColor = await showDialog<Color?>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
+        final dialogTheme = Theme.of(dialogContext);
+
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -89,6 +88,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                   key: _formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       TextFormField(
                         controller: _labelNameController,
@@ -114,7 +114,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                       const SizedBox(height: 20),
                       Text(
                         'Select Color:',
-                        style: TextStyle(color: AppColors.secondaryText),
+                        style: dialogTheme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -137,9 +137,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                                     border: Border.all(
                                       color:
                                           _selectedColor == color
-                                              ? Theme.of(
-                                                context,
-                                              ).primaryColorDark
+                                              ? dialogTheme.primaryColor
                                               : Colors.transparent,
                                       width: 2.5,
                                     ),
@@ -149,11 +147,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                             }).toList(),
                       ),
                       const SizedBox(height: 10),
-                      Container(
-                        height: 20,
-                        width: 100,
-                        color: _selectedColor,
-                      ), // Simple preview
+                      Container(height: 20, width: 100, color: _selectedColor),
                     ],
                   ),
                 ),
@@ -164,18 +158,10 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                   onPressed: () => Navigator.of(context).pop(null),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                  ),
-                  child: Text(
-                    existingLabel == null ? 'Create' : 'Save',
-                    style: TextStyle(color: AppColors.onPrimary),
-                  ),
+                  child: Text(existingLabel == null ? 'Create' : 'Save'),
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
-                      Navigator.of(
-                        context,
-                      ).pop(_selectedColor);
+                      Navigator.of(context).pop(_selectedColor);
                     }
                   },
                 ),
@@ -231,7 +217,9 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
               onPressed: () => Navigator.of(context).pop(false),
             ),
             TextButton(
-              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
               child: const Text('Delete'),
               onPressed: () => Navigator.of(context).pop(true),
             ),
@@ -260,20 +248,14 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Manage Labels',
-          style: TextStyle(color: AppColors.appBarForeground),
-        ),
-        backgroundColor: AppColors.appBarBackground,
-        iconTheme: IconThemeData(color: AppColors.primary),
-        elevation: 1,
-      ),
+      appBar: AppBar(title: const Text('Manage Labels'), elevation: 1),
       body:
           _isLoading
               ? Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: theme.primaryColor),
               )
               : _userId == null
               ? const Center(child: Text("Please log in to manage labels."))
@@ -288,14 +270,14 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                               Icon(
                                 Icons.label_off_outlined,
                                 size: 60,
-                                color: Colors.grey.shade400,
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.5),
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 'No labels created yet.',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey.shade600,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: theme.textTheme.bodyMedium?.color,
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -303,10 +285,6 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                                 icon: const Icon(Icons.add),
                                 label: const Text('Create First Label'),
                                 onPressed: () => _showLabelDialog(),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: AppColors.onPrimary,
-                                ),
                               ),
                             ],
                           ),
@@ -335,7 +313,7 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                                   IconButton(
                                     icon: Icon(
                                       Icons.edit_outlined,
-                                      color: AppColors.secondaryIcon,
+                                      color: theme.textTheme.bodyMedium?.color,
                                     ),
                                     tooltip: 'Edit Label',
                                     onPressed:
@@ -346,7 +324,8 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                                   IconButton(
                                     icon: Icon(
                                       Icons.delete_outline,
-                                      color: AppColors.error.withOpacity(0.8),
+                                      color: theme.colorScheme.error
+                                          .withOpacity(0.8),
                                     ),
                                     tooltip: 'Delete Label',
                                     onPressed: () => _confirmDeleteLabel(label),
@@ -354,18 +333,15 @@ class _ManageLabelsScreenState extends State<ManageLabelsScreen> {
                                 ],
                               ),
                               onTap:
-                                  () => _showLabelDialog(
-                                    existingLabel: label,
-                                  ),
+                                  () => _showLabelDialog(existingLabel: label),
                             );
                           },
                         ),
               ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showLabelDialog(),
-        backgroundColor: AppColors.primary,
         tooltip: 'Create New Label',
-        child: Icon(Icons.add, color: AppColors.onPrimary),
+        child: const Icon(Icons.add),
       ),
     );
   }

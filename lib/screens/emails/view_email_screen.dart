@@ -36,7 +36,6 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     vertical: 4.0,
   );
   bool _starStatusChanged = false;
-  bool _labelsChanged = false;
 
   List<LabelData> _userLabels = [];
   bool _isLoadingLabels = false;
@@ -204,7 +203,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
             TextButton(
               child: Text(
                 isPermanentDelete ? 'Delete Permanently' : 'Move to Trash',
-                style: TextStyle(color: AppColors.error),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
@@ -374,10 +373,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     ).then((_) => _refreshDataIfNeeded());
   }
 
-  void _refreshDataIfNeeded() {
-    // This method might be used if ComposeEmailScreen returns a specific signal
-    // For now, popping from ViewEmailScreen already triggers a refresh if needed.
-  }
+  void _refreshDataIfNeeded() {}
 
   void _viewAttachment(Map<String, String> attachment) {
     if (!mounted) return;
@@ -411,7 +407,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     return fullName.trim().split(' ').first;
   }
 
-  Widget _buildRecipientSummary() {
+  Widget _buildRecipientSummary(ThemeData theme) {
     List<String> toCcDisplayNames = [];
     bool currentUserIsInToCc = false;
 
@@ -483,7 +479,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
           "bcc: me",
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          style: theme.textTheme.bodyMedium,
         );
       }
     }
@@ -515,13 +511,14 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
       finalSummary,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+      style: theme.textTheme.bodyMedium,
     );
   }
 
   Widget _buildDetailedRecipientInfo(
     String label,
-    List<Map<String, String>> recipients, {
+    List<Map<String, String>> recipients,
+    ThemeData theme, {
     bool hideLabelColon = false,
   }) {
     if (recipients.isEmpty) return const SizedBox.shrink();
@@ -534,9 +531,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
             width: _labelWidth,
             child: Text(
               hideLabelColon ? label : '$label:',
-              style: TextStyle(
-                color: Colors.grey[700],
-                fontSize: 14,
+              style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -561,15 +556,13 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                         children: [
                           Text(
                             name,
-                            style: TextStyle(
-                              color: Colors.grey[800],
+                            style: theme.textTheme.bodyLarge?.copyWith(
                               fontSize: 14,
                             ),
                           ),
                           Text(
                             email,
-                            style: TextStyle(
-                              color: Colors.grey[600],
+                            style: theme.textTheme.bodyMedium?.copyWith(
                               fontSize: 13,
                             ),
                           ),
@@ -584,7 +577,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     );
   }
 
-  Widget _buildBccEntry() {
+  Widget _buildBccEntry(ThemeData theme) {
     final bool isCurrentUserTheOriginalSender =
         _currentUserId != null &&
         _currentEmailData.from['userId'] == _currentUserId;
@@ -594,7 +587,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     }
 
     if (isCurrentUserTheOriginalSender) {
-      return _buildDetailedRecipientInfo("Bcc", _currentEmailData.bcc!);
+      return _buildDetailedRecipientInfo("Bcc", _currentEmailData.bcc!, theme);
     } else {
       if (_currentUserId == null || _currentUserEmail == null) {
         return const SizedBox.shrink();
@@ -613,9 +606,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                 width: _labelWidth,
                 child: Text(
                   'Bcc:',
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -626,11 +617,11 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                   children: [
                     Text(
                       'me',
-                      style: TextStyle(color: Colors.grey[800], fontSize: 14),
+                      style: theme.textTheme.bodyLarge?.copyWith(fontSize: 14),
                     ),
                     Text(
                       _currentUserEmail!,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13),
                     ),
                   ],
                 ),
@@ -713,13 +704,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                  ),
-                  child: Text(
-                    'Save',
-                    style: TextStyle(color: AppColors.onPrimary),
-                  ),
+                  child: Text('Save'),
                   onPressed: () async {
                     Navigator.of(dialogContext).pop();
 
@@ -737,7 +722,6 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                         _currentEmailData = _currentEmailData.copyWith(
                           labelIds: selectedLabelIds,
                         );
-                        _labelsChanged = true;
                       });
                       scaffoldMessenger.showSnackBar(
                         const SnackBar(
@@ -768,7 +752,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
     );
   }
 
-  Widget _buildAppliedLabels() {
+  Widget _buildAppliedLabels(ThemeData theme) {
     if (_currentEmailData.labelIds.isEmpty || _userLabels.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -791,7 +775,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                 vertical: 2.0,
               ),
               labelStyle: TextStyle(
-                color: Colors.black87,
+                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w500,
               ),
               shape: RoundedRectangleBorder(
@@ -812,6 +796,8 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     String headerDisplayName;
     String emailForFromLineInDetails =
         _senderDisplayableEmail ??
@@ -847,9 +833,6 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: AppColors.appBarBackground,
-          elevation: 1,
-          iconTheme: IconThemeData(color: AppColors.primary),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
@@ -859,7 +842,6 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
               Navigator.pop(context, anythingChanged);
             },
           ),
-          actionsIconTheme: IconThemeData(color: AppColors.primary),
           actions: [
             if (_isProcessingAction)
               const Padding(
@@ -867,10 +849,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                 child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: AppColors.primary,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
                 ),
               )
             else ...[
@@ -885,7 +864,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                   color:
                       _currentEmailData.isStarred
                           ? AppColors.accent
-                          : AppColors.secondaryIcon,
+                          : theme.iconTheme.color?.withOpacity(0.7),
                 ),
                 tooltip:
                     _currentEmailData.isStarred ? 'Unstar email' : 'Star email',
@@ -917,16 +896,14 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildAppliedLabels(),
+              _buildAppliedLabels(theme),
               const SizedBox(height: 4),
 
               Text(
                 _currentEmailData.subject.isNotEmpty
                     ? _currentEmailData.subject
                     : '(No Subject)',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.headlineSmall,
               ),
               const SizedBox(height: 16),
               Row(
@@ -934,18 +911,15 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                 children: [
                   _isLoadingSenderProfile
                       ? CircleAvatar(
-                        backgroundColor: AppColors.primary.withOpacity(0.1),
+                        backgroundColor: theme.primaryColor.withOpacity(0.1),
                         child: const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primary,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
                       : CircleAvatar(
-                        backgroundColor: AppColors.primary.withOpacity(0.1),
+                        backgroundColor: theme.primaryColor.withOpacity(0.1),
                         backgroundImage:
                             (_senderPhotoUrl != null &&
                                     _senderPhotoUrl!.isNotEmpty)
@@ -960,7 +934,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                                           : '?')
                                       .toUpperCase(),
                                   style: TextStyle(
-                                    color: AppColors.primary,
+                                    color: theme.primaryColor,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 )
@@ -976,21 +950,14 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                             Expanded(
                               child: Text(
                                 headerDisplayName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: AppColors.appBarForeground,
-                                ),
+                                style: theme.textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
                             Text(
                               _formatShortDate(_currentEmailData.time),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.secondaryText,
-                              ),
+                              style: theme.textTheme.bodyMedium,
                             ),
                           ],
                         ),
@@ -1001,13 +968,13 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                                   setState(() => _showDetails = !_showDetails),
                           child: Row(
                             children: [
-                              Expanded(child: _buildRecipientSummary()),
+                              Expanded(child: _buildRecipientSummary(theme)),
                               Icon(
                                 _showDetails
                                     ? Icons.expand_less
                                     : Icons.expand_more,
                                 size: 20,
-                                color: AppColors.secondaryIcon,
+                                color: theme.textTheme.bodyMedium?.color,
                               ),
                             ],
                           ),
@@ -1033,9 +1000,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                               width: _labelWidth,
                               child: Text(
                                 'From:',
-                                style: TextStyle(
-                                  color: AppColors.secondaryText,
-                                  fontSize: 14,
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -1047,15 +1012,13 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                                   Text(
                                     _currentEmailData.from['displayName'] ??
                                         _currentEmailData.senderName,
-                                    style: TextStyle(
-                                      color: AppColors.appBarForeground,
+                                    style: theme.textTheme.bodyLarge?.copyWith(
                                       fontSize: 14,
                                     ),
                                   ),
                                   Text(
                                     emailForFromLineInDetails,
-                                    style: TextStyle(
-                                      color: AppColors.secondaryText,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                       fontSize: 13,
                                     ),
                                   ),
@@ -1065,13 +1028,18 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                           ],
                         ),
                       ),
-                      _buildDetailedRecipientInfo('To', _currentEmailData.to),
+                      _buildDetailedRecipientInfo(
+                        'To',
+                        _currentEmailData.to,
+                        theme,
+                      ),
                       if (_currentEmailData.cc?.isNotEmpty ?? false)
                         _buildDetailedRecipientInfo(
                           'Cc',
                           _currentEmailData.cc!,
+                          theme,
                         ),
-                      _buildBccEntry(),
+                      _buildBccEntry(theme),
                       Padding(
                         padding: _detailItemPadding,
                         child: Row(
@@ -1081,9 +1049,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                               width: _labelWidth,
                               child: Text(
                                 'Date:',
-                                style: TextStyle(
-                                  color: AppColors.secondaryText,
-                                  fontSize: 14,
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -1091,8 +1057,7 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                             Expanded(
                               child: Text(
                                 _formatFullDateTime(_currentEmailData.time),
-                                style: TextStyle(
-                                  color: AppColors.appBarForeground,
+                                style: theme.textTheme.bodyLarge?.copyWith(
                                   fontSize: 14,
                                 ),
                               ),
@@ -1111,17 +1076,11 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                 _currentEmailData.body.isNotEmpty
                     ? _currentEmailData.body
                     : '(No content)',
-                style: const TextStyle(fontSize: 16, height: 1.5),
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
               ),
               const SizedBox(height: 20),
               if (_currentEmailData.attachments?.isNotEmpty ?? false) ...[
-                Text(
-                  'Attachments:',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.appBarForeground,
-                  ),
-                ),
+                Text('Attachments:', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8.0,
@@ -1132,12 +1091,12 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                           avatar: Icon(
                             Icons.attach_file,
                             size: 16,
-                            color: AppColors.secondaryIcon,
+                            color: theme.textTheme.bodyMedium?.color,
                           ),
                           label: Text(attachment['name'] ?? 'file'),
                           onPressed: () => _viewAttachment(attachment),
-                          backgroundColor: Colors.grey[200],
-                          labelStyle: TextStyle(color: AppColors.secondaryText),
+                          backgroundColor: theme.chipTheme.backgroundColor,
+                          labelStyle: theme.chipTheme.labelStyle,
                         );
                       }).toList(),
                 ),
@@ -1148,7 +1107,6 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
         ),
         bottomNavigationBar: BottomAppBar(
           elevation: 4.0,
-          color: AppColors.appBarBackground,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
             child: Row(
@@ -1158,17 +1116,11 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
                   icon: const Icon(Icons.reply_outlined),
                   label: const Text('Reply'),
                   onPressed: _handleReplyEmail,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                  ),
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.forward_outlined),
                   label: const Text('Forward'),
                   onPressed: _handleForwardEmail,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                  ),
                 ),
               ],
             ),
