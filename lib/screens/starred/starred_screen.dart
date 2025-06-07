@@ -11,6 +11,8 @@ import 'package:email_application/widgets/email_list_item.dart';
 import 'package:email_application/widgets/email_list_view.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:email_application/config/app_colors.dart';
+import 'package:email_application/services/view_mode_notifier.dart';
+import 'package:email_application/widgets/simple_email_list_item.dart';
 
 class StarredScreen extends StatefulWidget {
   const StarredScreen({super.key});
@@ -54,23 +56,14 @@ class _StarredScreenState extends State<StarredScreen> {
     });
 
     if (_currentUser == null) {
-      if (mounted) {
-        setState(() {
-          _isLoadingLabels = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingLabels = false);
       return;
     }
 
     try {
       await _fetchUserLabels();
       await _setupEmailStream();
-
-      if (mounted) {
-        setState(() {
-          _isLoadingLabels = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingLabels = false);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -92,13 +85,9 @@ class _StarredScreenState extends State<StarredScreen> {
         listen: false,
       );
       final labels = await firestoreService.getLabelsForUser(_currentUser!.uid);
-      if (mounted) {
-        _userLabels = labels;
-      }
+      if (mounted) _userLabels = labels;
     } catch (e) {
-      if (mounted) {
-        print("StarredScreen: Error fetching labels: $e");
-      }
+      if (mounted) print("StarredScreen: Error fetching labels: $e");
       throw e;
     }
   }
@@ -119,7 +108,6 @@ class _StarredScreenState extends State<StarredScreen> {
 
   Future<void> _handleEmailTap(EmailData email) async {
     if (!mounted || _currentUser == null) return;
-
     dynamic resultFromNextScreen;
 
     if (email.folder == EmailFolder.drafts) {
@@ -140,25 +128,7 @@ class _StarredScreenState extends State<StarredScreen> {
 
     if (resultFromNextScreen == true ||
         resultFromNextScreen == false ||
-        resultFromNextScreen == null && mounted) {
-      final firestoreService = Provider.of<FirestoreService>(
-        context,
-        listen: false,
-      );
-      try {
-        final doc =
-            await firestoreService.usersCollection
-                .doc(_currentUser!.uid)
-                .collection('userEmails')
-                .doc(email.id)
-                .get();
-        if (mounted) {
-          if (!doc.exists || !(doc.data()?['isStarred'] ?? false)) {}
-        }
-      } catch (e) {
-        print("StarredScreen: Error checking email status after pop: $e");
-      }
-    }
+        (resultFromNextScreen == null && mounted)) {}
   }
 
   @override
@@ -169,6 +139,7 @@ class _StarredScreenState extends State<StarredScreen> {
       );
     }
 
+    final viewMode = Provider.of<ViewModeNotifier>(context).viewMode;
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _initializeData,
@@ -180,7 +151,6 @@ class _StarredScreenState extends State<StarredScreen> {
                 child: CircularProgressIndicator(color: AppColors.primary),
               );
             }
-
             if (_error != null) {
               return EmailListErrorView(
                 error: _error!,
@@ -196,7 +166,6 @@ class _StarredScreenState extends State<StarredScreen> {
                     child: CircularProgressIndicator(color: AppColors.primary),
                   );
                 }
-
                 if (snapshot.hasError) {
                   return EmailListErrorView(
                     error: snapshot.error!,
@@ -205,7 +174,6 @@ class _StarredScreenState extends State<StarredScreen> {
                 }
 
                 final starredEmails = snapshot.data ?? [];
-
                 if (starredEmails.isEmpty) {
                   return CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -240,15 +208,25 @@ class _StarredScreenState extends State<StarredScreen> {
                   itemCount: starredEmails.length,
                   itemBuilder: (context, index) {
                     final email = starredEmails[index];
-                    return EmailListItem(
-                      email: email,
-                      currentScreenFolder: email.folder,
-                      allUserLabels: _userLabels,
-                      onTap: () => _handleEmailTap(email),
-                      onReadStatusChanged: null,
-                      onDeleteOrMove: null,
-                      onStarStatusChanged: null,
-                    );
+
+                    if (viewMode == ViewMode.basic) {
+                      return SimpleEmailListItem(
+                        email: email,
+                        currentScreenFolder: email.folder,
+                        onTap: () => _handleEmailTap(email),
+                        onStarStatusChanged: null,
+                      );
+                    } else {
+                      return EmailListItem(
+                        email: email,
+                        currentScreenFolder: email.folder,
+                        allUserLabels: _userLabels,
+                        onTap: () => _handleEmailTap(email),
+                        onReadStatusChanged: null,
+                        onDeleteOrMove: null,
+                        onStarStatusChanged: null,
+                      );
+                    }
                   },
                 );
               },

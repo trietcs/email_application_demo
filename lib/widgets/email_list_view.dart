@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:email_application/models/email_data.dart';
 import 'package:email_application/models/email_folder.dart';
 import 'package:email_application/widgets/email_list_item.dart';
 import 'package:email_application/models/label_data.dart';
+import 'package:email_application/services/view_mode_notifier.dart';
+import 'package:email_application/widgets/simple_email_list_item.dart';
 
 typedef EmailTapCallback = Future<void> Function(EmailData email);
 typedef VoidFutureCallBack = Future<void> Function();
@@ -36,6 +39,8 @@ class EmailListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final viewMode = Provider.of<ViewModeNotifier>(context).viewMode;
+
     if (emails.isEmpty) {
       String message;
       IconData iconData;
@@ -98,15 +103,25 @@ class EmailListView extends StatelessWidget {
       itemCount: emails.length,
       itemBuilder: (context, index) {
         final email = emails[index];
-        return EmailListItem(
-          email: email,
-          currentScreenFolder: currentScreenFolder,
-          allUserLabels: allUserLabels,
-          onTap: () => onEmailTap(email),
-          onReadStatusChanged: onReadStatusChanged,
-          onDeleteOrMove: onDeleteOrMove,
-          onStarStatusChanged: onStarStatusChanged,
-        );
+
+        if (viewMode == ViewMode.basic) {
+          return SimpleEmailListItem(
+            email: email,
+            currentScreenFolder: currentScreenFolder,
+            onTap: () => onEmailTap(email),
+            onStarStatusChanged: onStarStatusChanged,
+          );
+        } else {
+          return EmailListItem(
+            email: email,
+            currentScreenFolder: currentScreenFolder,
+            allUserLabels: allUserLabels,
+            onTap: () => onEmailTap(email),
+            onReadStatusChanged: onReadStatusChanged,
+            onDeleteOrMove: onDeleteOrMove,
+            onStarStatusChanged: onStarStatusChanged,
+          );
+        }
       },
     );
   }

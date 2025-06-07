@@ -1,4 +1,5 @@
 import 'package:email_application/services/theme_notifier.dart';
+import 'package:email_application/services/view_mode_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +10,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final themeNotifier = Provider.of<ThemeNotifier>(context);
+    final viewModeNotifier = Provider.of<ViewModeNotifier>(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -24,6 +26,21 @@ class SettingsScreen extends StatelessWidget {
             },
             secondary: Icon(
               Icons.dark_mode_outlined,
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+
+          SwitchListTile(
+            title: const Text('Detailed Email View'),
+            subtitle: const Text(
+              'Show previews, labels, and attachments in list',
+            ),
+            value: viewModeNotifier.viewMode == ViewMode.detailed,
+            onChanged: (value) {
+              viewModeNotifier.toggleViewMode();
+            },
+            secondary: Icon(
+              Icons.view_list_outlined,
               color: theme.colorScheme.onSurface.withOpacity(0.6),
             ),
           ),

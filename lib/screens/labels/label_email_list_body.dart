@@ -11,6 +11,8 @@ import 'package:email_application/widgets/email_list_view.dart';
 import 'package:email_application/widgets/email_list_item.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:email_application/config/app_colors.dart';
+import 'package:email_application/services/view_mode_notifier.dart';
+import 'package:email_application/widgets/simple_email_list_item.dart';
 
 class LabelEmailListBody extends StatefulWidget {
   final LabelData label;
@@ -63,22 +65,14 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
     });
 
     if (_currentUser == null) {
-      if (mounted) {
-        setState(() {
-          _isLoadingLabels = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingLabels = false);
       return;
     }
 
     try {
       await _fetchUserLabels();
       await _setupEmailStream();
-      if (mounted) {
-        setState(() {
-          _isLoadingLabels = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingLabels = false);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -100,13 +94,10 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
         listen: false,
       );
       final labels = await firestoreService.getLabelsForUser(_currentUser!.uid);
-      if (mounted) {
-        _allUserLabels = labels;
-      }
+      if (mounted) _allUserLabels = labels;
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         print("LabelEmailListBody: Error fetching all user labels: $e");
-      }
       throw e;
     }
   }
@@ -128,7 +119,6 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
 
   Future<void> _handleEmailTap(EmailData email) async {
     if (!mounted || _currentUser == null) return;
-
     dynamic resultFromNextScreen;
 
     if (email.folder == EmailFolder.drafts) {
@@ -149,33 +139,13 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
 
     if (resultFromNextScreen == true ||
         resultFromNextScreen == false ||
-        (resultFromNextScreen == null && mounted)) {
-      final firestoreService = Provider.of<FirestoreService>(
-        context,
-        listen: false,
-      );
-      try {
-        final doc =
-            await firestoreService.usersCollection
-                .doc(_currentUser!.uid)
-                .collection('userEmails')
-                .doc(email.id)
-                .get();
-        if (mounted) {
-          if (!doc.exists) {
-          } else {
-            final updatedEmailData = EmailData.fromMap(doc.data()!, doc.id);
-            if (!updatedEmailData.labelIds.contains(widget.label.id)) {}
-          }
-        }
-      } catch (e) {
-        print("Error checking email status after pop from next screen: $e");
-      }
-    }
+        (resultFromNextScreen == null && mounted)) {}
   }
 
   @override
   Widget build(BuildContext context) {
+    final viewMode = Provider.of<ViewModeNotifier>(context).viewMode;
+
     return RefreshIndicator(
       onRefresh: _initializeData,
       color: AppColors.primary,
@@ -257,15 +227,24 @@ class _LabelEmailListBodyState extends State<LabelEmailListBody> {
                     itemDisplayContextFolder = email.originalFolder!;
                   }
 
-                  return EmailListItem(
-                    email: email,
-                    currentScreenFolder: itemDisplayContextFolder,
-                    allUserLabels: _allUserLabels,
-                    onTap: () => _handleEmailTap(email),
-                    onReadStatusChanged: null,
-                    onDeleteOrMove: null,
-                    onStarStatusChanged: null,
-                  );
+                  if (viewMode == ViewMode.basic) {
+                    return SimpleEmailListItem(
+                      email: email,
+                      currentScreenFolder: itemDisplayContextFolder,
+                      onTap: () => _handleEmailTap(email),
+                      onStarStatusChanged: null,
+                    );
+                  } else {
+                    return EmailListItem(
+                      email: email,
+                      currentScreenFolder: itemDisplayContextFolder,
+                      allUserLabels: _allUserLabels,
+                      onTap: () => _handleEmailTap(email),
+                      onReadStatusChanged: null,
+                      onDeleteOrMove: null,
+                      onStarStatusChanged: null,
+                    );
+                  }
                 },
               );
             },
