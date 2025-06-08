@@ -492,394 +492,405 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildPhoneInputPage() {
     final theme = Theme.of(context);
-    return Form(
-      key: _phoneFormKey,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            "Step 1: Enter Phone Number",
-            style: theme.textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          TextFormField(
-            controller: _phoneNumberController,
-            focusNode: _phoneFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'Phone Number',
-              'E.g., 0901234567 or +84901234567',
-              Icons.phone_android_rounded,
-              _phoneFocusNode.hasFocus,
-              theme,
+    return SingleChildScrollView(
+      child: Form(
+        key: _phoneFormKey,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              "Step 1: Enter Phone Number",
+              style: theme.textTheme.headlineSmall,
+              textAlign: TextAlign.center,
             ),
-            keyboardType: TextInputType.phone,
-            validator: (value) {
-              if (value == null || value.isEmpty)
-                return 'Please enter your phone number.';
-              if (!RegExp(
-                r'^(?:\+?[1-9]\d{7,14}|0\d{9,10})$',
-              ).hasMatch(value.replaceAll(RegExp(r'\s+|-|\(|\)'), '')))
-                return 'Invalid phone number format.';
-              return null;
-            },
-          ),
-          const SizedBox(height: 24),
-          _isLoading
-              ? Center(
-                child: CircularProgressIndicator(color: theme.primaryColor),
-              )
-              : ElevatedButton(
-                onPressed: _sendOtp,
-                child: const Text('Send OTP'),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _phoneNumberController,
+              focusNode: _phoneFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'Phone Number',
+                'E.g., 0901234567 or +84901234567',
+                Icons.phone_android_rounded,
+                _phoneFocusNode.hasFocus,
+                theme,
               ),
-        ],
+              keyboardType: TextInputType.phone,
+              validator: (value) {
+                if (value == null || value.isEmpty)
+                  return 'Please enter your phone number.';
+                if (!RegExp(
+                  r'^(?:\+?[1-9]\d{7,14}|0\d{9,10})$',
+                ).hasMatch(value.replaceAll(RegExp(r'\s+|-|\(|\)'), '')))
+                  return 'Invalid phone number format.';
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
+            _isLoading
+                ? Center(
+                  child: CircularProgressIndicator(color: theme.primaryColor),
+                )
+                : ElevatedButton(
+                  onPressed: _sendOtp,
+                  child: const Text('Send OTP'),
+                ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildOtpInputPage() {
     final theme = Theme.of(context);
-    return Form(
-      key: _otpFormKey,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            "Step 2: Verify OTP",
-            style: theme.textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Enter the OTP sent to\n$_verifiedPhoneNumberForDisplay",
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 24),
-          TextFormField(
-            controller: _otpController,
-            focusNode: _otpFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'OTP Code (6 digits)',
-              '******',
-              Icons.sms_failed_outlined,
-              _otpFocusNode.hasFocus,
-              theme,
-            ).copyWith(counterText: ""),
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            maxLength: 6,
-            validator: (value) {
-              if (value == null || value.isEmpty)
-                return 'Please enter the OTP.';
-              if (value.length != 6) return 'OTP must be 6 digits.';
-              return null;
-            },
-          ),
-          const SizedBox(height: 24),
-          _isLoading
-              ? Center(
-                child: CircularProgressIndicator(color: theme.primaryColor),
-              )
-              : ElevatedButton(
-                onPressed: _verifyOtpAndProceed,
-                child: const Text('Verify OTP & Continue'),
-              ),
-          TextButton(
-            onPressed:
-                _isLoading
-                    ? null
-                    : () => _moveToPage(RegistrationStep.phoneInput.index),
-            child: const Text("Back to Phone Input"),
-          ),
-        ],
+    return SingleChildScrollView(
+      child: Form(
+        key: _otpFormKey,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              "Step 2: Verify OTP",
+              style: theme.textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Enter the OTP sent to\n$_verifiedPhoneNumberForDisplay",
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _otpController,
+              focusNode: _otpFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'OTP Code (6 digits)',
+                '******',
+                Icons.sms_failed_outlined,
+                _otpFocusNode.hasFocus,
+                theme,
+              ).copyWith(counterText: ""),
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              maxLength: 6,
+              validator: (value) {
+                if (value == null || value.isEmpty)
+                  return 'Please enter the OTP.';
+                if (value.length != 6) return 'OTP must be 6 digits.';
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
+            _isLoading
+                ? Center(
+                  child: CircularProgressIndicator(color: theme.primaryColor),
+                )
+                : ElevatedButton(
+                  onPressed: _verifyOtpAndProceed,
+                  child: const Text('Verify OTP & Continue'),
+                ),
+            TextButton(
+              onPressed:
+                  _isLoading
+                      ? null
+                      : () => _moveToPage(RegistrationStep.phoneInput.index),
+              child: const Text("Back to Phone Input"),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildPersonalInfoInputPage() {
     final theme = Theme.of(context);
-    return Form(
-      key: _personalInfoFormKey,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            "Step 3: Personal Information",
-            style: theme.textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          TextFormField(
-            controller: _displayNameController,
-            focusNode: _displayNameFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'Full Name',
-              'John Doe',
-              Icons.person_outline_rounded,
-              _displayNameFocusNode.hasFocus,
-              theme,
+    return SingleChildScrollView(
+      child: Form(
+        key: _personalInfoFormKey,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              "Step 3: Personal Information",
+              style: theme.textTheme.headlineSmall,
+              textAlign: TextAlign.center,
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty)
-                return 'Please enter your full name.';
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            focusNode: _genderFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'Gender',
-              '',
-              Icons.wc_rounded,
-              _genderFocusNode.hasFocus,
-              theme,
-            ).copyWith(
-              hintText: 'Select Gender',
-              hintStyle: theme.textTheme.bodyMedium,
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _displayNameController,
+              focusNode: _displayNameFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'Full Name',
+                'John Doe',
+                Icons.person_outline_rounded,
+                _displayNameFocusNode.hasFocus,
+                theme,
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty)
+                  return 'Please enter your full name.';
+                return null;
+              },
             ),
-            value: _selectedGender,
-            items:
-                ['Nam', 'Nữ', 'Khác']
-                    .map(
-                      (label) => DropdownMenuItem(
-                        value: label,
-                        child: Text(
-                          label == 'Nam'
-                              ? 'Male'
-                              : label == 'Nữ'
-                              ? 'Female'
-                              : 'Other',
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              focusNode: _genderFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'Gender',
+                '',
+                Icons.wc_rounded,
+                _genderFocusNode.hasFocus,
+                theme,
+              ).copyWith(
+                hintText: 'Select Gender',
+                hintStyle: theme.textTheme.bodyMedium,
+              ),
+              value: _selectedGender,
+              items:
+                  ['Nam', 'Nữ', 'Khác']
+                      .map(
+                        (label) => DropdownMenuItem(
+                          value: label,
+                          child: Text(
+                            label == 'Nam'
+                                ? 'Male'
+                                : label == 'Nữ'
+                                ? 'Female'
+                                : 'Other',
+                          ),
+                        ),
+                      )
+                      .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedGender = value;
+                });
+              },
+              validator:
+                  (value) =>
+                      value == null ? 'Please select your gender.' : null,
+              iconEnabledColor:
+                  _genderFocusNode.hasFocus
+                      ? theme.primaryColor
+                      : theme.textTheme.bodyMedium?.color,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _dobController,
+              focusNode: _dobFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'Date of Birth',
+                'Tap to select date',
+                Icons.calendar_today_rounded,
+                _dobFocusNode.hasFocus,
+                theme,
+              ),
+              readOnly: true,
+              onTap: () async {
+                FocusScope.of(context).requestFocus(FocusNode());
+                DateTime? pickedDate = await showDatePicker(
+                  context: context,
+                  initialDate:
+                      _selectedDateOfBirth ??
+                      DateTime.now().subtract(const Duration(days: 365 * 18)),
+                  firstDate: DateTime(1900),
+                  lastDate: DateTime.now().subtract(
+                    const Duration(days: 365 * 5),
+                  ),
+                  locale: const Locale('vi', 'VN'),
+                  builder: (context, child) {
+                    return Theme(
+                      data: theme.copyWith(
+                        colorScheme: theme.colorScheme.copyWith(
+                          primary: AppColors.primary,
+                          onPrimary: AppColors.lightOnPrimary,
                         ),
                       ),
-                    )
-                    .toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedGender = value;
-              });
-            },
-            validator:
-                (value) => value == null ? 'Please select your gender.' : null,
-            iconEnabledColor:
-                _genderFocusNode.hasFocus
-                    ? theme.primaryColor
-                    : theme.textTheme.bodyMedium?.color,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _dobController,
-            focusNode: _dobFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'Date of Birth',
-              'Tap to select date',
-              Icons.calendar_today_rounded,
-              _dobFocusNode.hasFocus,
-              theme,
+                      child: child!,
+                    );
+                  },
+                );
+                if (pickedDate != null && pickedDate != _selectedDateOfBirth) {
+                  setState(() {
+                    _selectedDateOfBirth = pickedDate;
+                    _dobController.text = DateFormat(
+                      'dd/MM/yyyy',
+                    ).format(pickedDate);
+                  });
+                }
+              },
+              validator:
+                  (value) =>
+                      _selectedDateOfBirth == null
+                          ? 'Please select your date of birth.'
+                          : null,
             ),
-            readOnly: true,
-            onTap: () async {
-              FocusScope.of(context).requestFocus(FocusNode());
-              DateTime? pickedDate = await showDatePicker(
-                context: context,
-                initialDate:
-                    _selectedDateOfBirth ??
-                    DateTime.now().subtract(const Duration(days: 365 * 18)),
-                firstDate: DateTime(1900),
-                lastDate: DateTime.now().subtract(
-                  const Duration(days: 365 * 5),
+            const SizedBox(height: 24),
+            _isLoading
+                ? Center(
+                  child: CircularProgressIndicator(color: theme.primaryColor),
+                )
+                : ElevatedButton(
+                  onPressed: _proceedToEmailPassword,
+                  child: const Text('Continue'),
                 ),
-                locale: const Locale('vi', 'VN'),
-                builder: (context, child) {
-                  return Theme(
-                    data: theme.copyWith(
-                      colorScheme: theme.colorScheme.copyWith(
-                        primary: AppColors.primary,
-                        onPrimary: AppColors.lightOnPrimary,
-                      ),
-                    ),
-                    child: child!,
-                  );
-                },
-              );
-              if (pickedDate != null && pickedDate != _selectedDateOfBirth) {
-                setState(() {
-                  _selectedDateOfBirth = pickedDate;
-                  _dobController.text = DateFormat(
-                    'dd/MM/yyyy',
-                  ).format(pickedDate);
-                });
-              }
-            },
-            validator:
-                (value) =>
-                    _selectedDateOfBirth == null
-                        ? 'Please select your date of birth.'
-                        : null,
-          ),
-          const SizedBox(height: 24),
-          _isLoading
-              ? Center(
-                child: CircularProgressIndicator(color: theme.primaryColor),
-              )
-              : ElevatedButton(
-                onPressed: _proceedToEmailPassword,
-                child: const Text('Continue'),
-              ),
-          TextButton(
-            onPressed:
-                _isLoading
-                    ? null
-                    : () => _moveToPage(RegistrationStep.otpInput.index),
-            child: const Text("Back to OTP Input"),
-          ),
-        ],
+            TextButton(
+              onPressed:
+                  _isLoading
+                      ? null
+                      : () => _moveToPage(RegistrationStep.otpInput.index),
+              child: const Text("Back to OTP Input"),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildEmailPasswordInputPage() {
     final theme = Theme.of(context);
-    return Form(
-      key: _emailPasswordFormKey,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            "Step 4: Create Email & Password",
-            style: theme.textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          TextFormField(
-            controller: _emailUsernameController,
-            focusNode: _emailUsernameFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'Email Username',
-              'e.g., your.name',
-              Icons.alternate_email_rounded,
-              _emailUsernameFocusNode.hasFocus,
-              theme,
-            ).copyWith(suffixText: "@tvamail.com"),
-            validator: (value) {
-              if (value == null || value.isEmpty)
-                return 'Please choose a username.';
-              if (value.contains('@') || value.contains(' '))
-                return 'Username is invalid (no @ or spaces).';
-              if (value.length < 3)
-                return 'Username must be at least 3 characters.';
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _passwordController,
-            focusNode: _passwordFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'Password',
-              '******',
-              Icons.lock_outline_rounded,
-              _passwordFocusNode.hasFocus,
-              theme,
-            ).copyWith(
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  color:
-                      _passwordFocusNode.hasFocus
-                          ? theme.primaryColor
-                          : theme.textTheme.bodyMedium?.color,
-                ),
-                onPressed:
-                    () => setState(() => _obscurePassword = !_obscurePassword),
-              ),
+    return SingleChildScrollView(
+      child: Form(
+        key: _emailPasswordFormKey,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              "Step 4: Create Email & Password",
+              style: theme.textTheme.headlineSmall,
+              textAlign: TextAlign.center,
             ),
-            obscureText: _obscurePassword,
-            validator: (value) {
-              if (value == null || value.isEmpty)
-                return 'Please enter a password.';
-              if (value.length < 6)
-                return 'Password must be at least 6 characters.';
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _confirmPasswordController,
-            focusNode: _confirmPasswordFocusNode,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: _themedInputDecoration(
-              'Confirm Password',
-              '******',
-              Icons.lock_person_outlined,
-              _confirmPasswordFocusNode.hasFocus,
-              theme,
-            ).copyWith(
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureConfirmPassword
-                      ? Icons.visibility_off
-                      : Icons.visibility,
-                  color:
-                      _confirmPasswordFocusNode.hasFocus
-                          ? theme.primaryColor
-                          : theme.textTheme.bodyMedium?.color,
-                ),
-                onPressed:
-                    () => setState(
-                      () => _obscureConfirmPassword = !_obscureConfirmPassword,
-                    ),
-              ),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _emailUsernameController,
+              focusNode: _emailUsernameFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'Email Username',
+                'e.g., your.name',
+                Icons.alternate_email_rounded,
+                _emailUsernameFocusNode.hasFocus,
+                theme,
+              ).copyWith(suffixText: "@tvamail.com"),
+              validator: (value) {
+                if (value == null || value.isEmpty)
+                  return 'Please choose a username.';
+                if (value.contains('@') || value.contains(' '))
+                  return 'Username is invalid (no @ or spaces).';
+                if (value.length < 3)
+                  return 'Username must be at least 3 characters.';
+                return null;
+              },
             ),
-            obscureText: _obscureConfirmPassword,
-            validator: (value) {
-              if (value == null || value.isEmpty)
-                return 'Please confirm your password.';
-              if (value != _passwordController.text)
-                return 'Passwords do not match.';
-              return null;
-            },
-          ),
-          const SizedBox(height: 24),
-          Text(
-            "Verified Phone: $_verifiedPhoneNumberForDisplay",
-            style: theme.textTheme.bodyLarge,
-          ),
-          Text(
-            "Full Name: ${_displayNameController.text}",
-            style: theme.textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 24),
-          _isLoading
-              ? Center(
-                child: CircularProgressIndicator(color: theme.primaryColor),
-              )
-              : ElevatedButton(
-                onPressed: _completeRegistration,
-                child: const Text('Complete Registration'),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              focusNode: _passwordFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'Password',
+                '******',
+                Icons.lock_outline_rounded,
+                _passwordFocusNode.hasFocus,
+                theme,
+              ).copyWith(
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    color:
+                        _passwordFocusNode.hasFocus
+                            ? theme.primaryColor
+                            : theme.textTheme.bodyMedium?.color,
+                  ),
+                  onPressed:
+                      () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                ),
               ),
-          TextButton(
-            onPressed:
-                _isLoading
-                    ? null
-                    : () =>
-                        _moveToPage(RegistrationStep.personalInfoInput.index),
-            child: const Text("Back to Personal Info"),
-          ),
-        ],
+              obscureText: _obscurePassword,
+              validator: (value) {
+                if (value == null || value.isEmpty)
+                  return 'Please enter a password.';
+                if (value.length < 6)
+                  return 'Password must be at least 6 characters.';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _confirmPasswordController,
+              focusNode: _confirmPasswordFocusNode,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: _themedInputDecoration(
+                'Confirm Password',
+                '******',
+                Icons.lock_person_outlined,
+                _confirmPasswordFocusNode.hasFocus,
+                theme,
+              ).copyWith(
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirmPassword
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    color:
+                        _confirmPasswordFocusNode.hasFocus
+                            ? theme.primaryColor
+                            : theme.textTheme.bodyMedium?.color,
+                  ),
+                  onPressed:
+                      () => setState(
+                        () =>
+                            _obscureConfirmPassword = !_obscureConfirmPassword,
+                      ),
+                ),
+              ),
+              obscureText: _obscureConfirmPassword,
+              validator: (value) {
+                if (value == null || value.isEmpty)
+                  return 'Please confirm your password.';
+                if (value != _passwordController.text)
+                  return 'Passwords do not match.';
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
+            Text(
+              "Verified Phone: $_verifiedPhoneNumberForDisplay",
+              style: theme.textTheme.bodyLarge,
+            ),
+            Text(
+              "Full Name: ${_displayNameController.text}",
+              style: theme.textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            _isLoading
+                ? Center(
+                  child: CircularProgressIndicator(color: theme.primaryColor),
+                )
+                : ElevatedButton(
+                  onPressed: _completeRegistration,
+                  child: const Text('Complete Registration'),
+                ),
+            TextButton(
+              onPressed:
+                  _isLoading
+                      ? null
+                      : () =>
+                          _moveToPage(RegistrationStep.personalInfoInput.index),
+              child: const Text("Back to Personal Info"),
+            ),
+          ],
+        ),
       ),
     );
   }

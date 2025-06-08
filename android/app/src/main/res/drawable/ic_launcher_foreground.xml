@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The <inset> tag is used to scale down the foreground image,
+    ensuring it fits within the "safe zone" of the adaptive icon
+    and doesn't get cropped on different devices.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <bitmap
+            android:src="@drawable/ic_launcher_foreground_image"
+            android:gravity="center"/>
+    </item>
+</layer-list>

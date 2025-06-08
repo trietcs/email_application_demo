@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -7,6 +10,14 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// BẮT ĐẦU: ĐOẠN MÃ ĐỌC key.properties (Kotlin DSL)
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+// KẾT THÚC: ĐOẠN MÃ ĐỌC key.properties
 
 android {
     namespace = "com.example.email_application"
@@ -28,16 +39,33 @@ android {
 
     defaultConfig {
         applicationId = "com.example.email_application"
-        // Thay đổi minSdkVersion thành 23 hoặc cao hơn nếu cần
-        minSdk = 23
+        // THAY ĐỔI DÒNG NÀY TỪ 23 THÀNH 26
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    // BẮT ĐẦU: CẤU HÌNH KÝ ỨNG DỤNG (Kotlin DSL)
+    signingConfigs {
+        create("release") { // Sử dụng create("release") thay vì getByName("release")
+            storeFile = file(keystoreProperties.getProperty("storeFile"))
+            storePassword = keystoreProperties.getProperty("storePassword")
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+        }
+    }
+    // KẾT THÚC: CẤU HÌNH KÝ ỨNG DỤNG
+
     buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("release") { // Sử dụng getByName("release")
+            // Thay đổi signingConfig từ "debug" sang "release"
+            signingConfig = signingConfigs.getByName("release")
+
+            // Rất khuyến khích để tối ưu hóa kích thước và hiệu suất
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false // Đảm bảo đây không phải là bản debug
         }
     }
 }
