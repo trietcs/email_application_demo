@@ -1,3 +1,4 @@
+import 'package:email_application/services/notification_settings_notifier.dart';
 import 'package:email_application/services/theme_notifier.dart';
 import 'package:email_application/services/view_mode_notifier.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,8 @@ class SettingsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final themeNotifier = Provider.of<ThemeNotifier>(context);
     final viewModeNotifier = Provider.of<ViewModeNotifier>(context);
+    final notificationSettingsNotifier =
+        Provider.of<NotificationSettingsNotifier>(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -29,7 +32,6 @@ class SettingsScreen extends StatelessWidget {
               color: theme.colorScheme.onSurface.withOpacity(0.6),
             ),
           ),
-
           SwitchListTile(
             title: const Text('Detailed Email View'),
             subtitle: const Text(
@@ -41,6 +43,22 @@ class SettingsScreen extends StatelessWidget {
             },
             secondary: Icon(
               Icons.view_list_outlined,
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+
+          _buildSectionTitle('Notifications', context),
+          SwitchListTile(
+            title: const Text('New Email Notifications'),
+            subtitle: const Text('Receive alerts for new incoming emails'),
+            value: notificationSettingsNotifier.areNotificationsEnabled,
+            onChanged: (value) {
+              notificationSettingsNotifier.toggleNotifications(value);
+            },
+            secondary: Icon(
+              notificationSettingsNotifier.areNotificationsEnabled
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_off_outlined,
               color: theme.colorScheme.onSurface.withOpacity(0.6),
             ),
           ),

@@ -9,6 +9,8 @@ import 'package:email_application/screens/profile/view_profile_screen.dart';
 import 'package:email_application/screens/settings/settings_screen.dart';
 import 'package:email_application/services/auth_service.dart';
 import 'package:email_application/services/firestore_service.dart';
+import 'package:email_application/services/notification_service.dart';
+import 'package:email_application/services/notification_settings_notifier.dart';
 import 'package:email_application/services/theme_notifier.dart';
 import 'package:email_application/services/view_mode_notifier.dart';
 import 'package:email_application/widgets/auth_wrapper.dart';
@@ -21,13 +23,19 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  final NotificationService notificationService = NotificationService();
+  await notificationService.init();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeNotifier()),
         ChangeNotifierProvider(create: (_) => ViewModeNotifier()),
+        ChangeNotifierProvider(create: (_) => NotificationSettingsNotifier()),
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
+        Provider<NotificationService>(create: (_) => notificationService),
         StreamProvider<User?>(
           create: (context) => context.read<AuthService>().user,
           initialData: null,

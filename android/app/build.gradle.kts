@@ -11,9 +11,13 @@ plugins {
 android {
     namespace = "com.example.email_application"
     compileSdk = flutter.compileSdkVersion
+    // ndkVersion không cần thiết cho trường hợp này, bạn có thể giữ hoặc xóa
     ndkVersion = "27.0.12077973"
 
     compileOptions {
+        // BẬT CORE LIBRARY DESUGARING
+        isCoreLibraryDesugaringEnabled = true
+        // Giữ nguyên phiên bản Java mà project của bạn đang dùng
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -23,10 +27,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.email_application"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // Thay đổi minSdkVersion thành 23 hoặc cao hơn nếu cần
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -35,8 +37,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -44,4 +44,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // THAY ĐỔI: CẬP NHẬT PHIÊN BẢN THEO YÊU CẦU CỦA LỖI
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

@@ -118,7 +118,8 @@ class _ViewEmailScreenState extends State<ViewEmailScreen> {
 
   Future<void> _markEmailAsReadOnOpen() async {
     if (!mounted) return;
-    if (_currentEmailData.folder == EmailFolder.inbox &&
+    if ((_currentEmailData.folder == EmailFolder.inbox ||
+            _currentEmailData.folder == EmailFolder.trash) &&
         _currentEmailData.id.isNotEmpty &&
         !_currentEmailData.isRead) {
       final user = Provider.of<AuthService>(context, listen: false).currentUser;

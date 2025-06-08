@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:email_application/config/app_colors.dart';
+import 'package:email_application/models/email_folder.dart';
 import 'package:email_application/screens/compose/compose_email_screen.dart';
 import 'package:email_application/screens/profile/view_profile_screen.dart';
+import 'package:email_application/services/notification_service.dart';
+import 'package:email_application/services/notification_settings_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:email_application/screens/inbox/inbox_screen.dart';
 import 'package:email_application/screens/sent/sent_screen.dart';
@@ -29,6 +33,10 @@ class _MainScreenState extends State<MainScreen> {
 
   LabelData? _selectedLabelForView;
   String _currentAppBarTitle = 'Inbox';
+
+  StreamSubscription? _inboxSubscription;
+  Set<String> _knownEmailIds = {};
+  bool _isFirstLoad = true;
 
   final List<Widget> _staticScreens = [
     const InboxScreen(),
@@ -62,6 +70,53 @@ class _MainScreenState extends State<MainScreen> {
     } else {
       _currentAppBarTitle = _staticTitles[_currentStaticScreenIndex];
       _fetchUserLabelsForDrawer();
+      _setupNotificationListener();
+    }
+  }
+
+  void _setupNotificationListener() {
+    _inboxSubscription?.cancel();
+    _isFirstLoad = true;
+
+    if (_currentUser != null) {
+      final firestoreService = Provider.of<FirestoreService>(
+        context,
+        listen: false,
+      );
+      final notificationService = Provider.of<NotificationService>(
+        context,
+        listen: false,
+      );
+      final notificationSettings = Provider.of<NotificationSettingsNotifier>(
+        context,
+        listen: false,
+      );
+
+      _inboxSubscription = firestoreService
+          .getEmailsStream(_currentUser!.uid, EmailFolder.inbox)
+          .listen((emails) {
+            if (!mounted) return;
+
+            if (_isFirstLoad) {
+              _knownEmailIds = emails.map((e) => e.id).toSet();
+              _isFirstLoad = false;
+              return;
+            }
+
+            for (final email in emails) {
+              if (!_knownEmailIds.contains(email.id) && !email.isRead) {
+                if (notificationSettings.areNotificationsEnabled) {
+                  print(
+                    'New email detected and notifications are ON: ${email.subject}',
+                  );
+                  notificationService.showNewEmailNotification(email);
+                } else {
+                  print('New email detected but notifications are OFF.');
+                }
+              }
+            }
+            _knownEmailIds = emails.map((e) => e.id).toSet();
+          });
     }
   }
 
@@ -79,8 +134,15 @@ class _MainScreenState extends State<MainScreen> {
       } else {
         _fetchUserLabelsForDrawer();
         _switchToStaticScreen(0, shouldPopDrawer: false);
+        _setupNotificationListener();
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _inboxSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchUserLabelsForDrawer() async {
@@ -256,13 +318,13 @@ class _MainScreenState extends State<MainScreen> {
         leading: Builder(
           builder:
               (context) => IconButton(
-                icon: Icon(Icons.menu, size: 28),
+                icon: const Icon(Icons.menu, size: 28),
                 onPressed: () => Scaffold.of(context).openDrawer(),
               ),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.search, size: 28),
+            icon: const Icon(Icons.search, size: 28),
             tooltip: 'Search Emails',
             onPressed: () {
               showSearch(
@@ -289,7 +351,7 @@ class _MainScreenState extends State<MainScreen> {
                       children: [
                         Image.asset(
                           'assets/images/app_logo.png',
-                          width: 40, // Điều chỉnh kích thước nếu cần
+                          width: 40,
                           height: 40,
                         ),
                         const SizedBox(width: 12),
